@@ -22,13 +22,14 @@ import {
   Loader2,
   CheckCircle2,
   Clock,
-  FileQuestion
+  FileQuestion,
+  Sparkles,
+  ChevronRight
 } from 'lucide-react';
 
 export default function StudentFormPage() {
   const router = useRouter();
 
-  // Live U.S. Embassy Standard Time (Washington DC / Eastern Time)
   const [usTime, setUsTime] = useState('');
   useEffect(() => {
     const updateTime = () => {
@@ -295,11 +296,15 @@ export default function StudentFormPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#030712] text-slate-100 p-4 md:p-10 flex flex-col justify-between items-center relative">
-      {/* Secret Admin Verification Modal */}
+    <main className="min-h-screen bg-[#05070E] text-slate-100 p-4 md:p-10 flex flex-col justify-between items-center relative overflow-hidden">
+      
+      {/* Background Ambient Radial Lights */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-gradient-to-b from-blue-600/10 via-indigo-600/5 to-transparent blur-3xl pointer-events-none"></div>
+
+      {/* Secret Admin Modal */}
       {showAdminModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+          <div className="bg-[#0B0F19] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
             <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
               <KeyRound className="w-5 h-5" />
               <span>Consular Adjudicator Console</span>
@@ -316,13 +321,13 @@ export default function StudentFormPage() {
                   value={adminSecret}
                   onChange={(e) => setAdminSecret(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleVerifyAdminPasscode()}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 text-white"
+                  className="w-full bg-slate-900 border border-white/10 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 text-white"
                 />
                 <button
                   type="button"
                   onClick={handleVerifyAdminPasscode}
                   disabled={isVerifyingAdmin || !adminSecret.trim()}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  className="w-full py-2.5 bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer shadow-lg shadow-blue-500/20"
                 >
                   {isVerifyingAdmin ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                   <span>Authenticate Access</span>
@@ -337,14 +342,14 @@ export default function StudentFormPage() {
                   <button
                     type="button"
                     onClick={() => executeAdminJump('/vo-panel')}
-                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-white/10 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                   >
                     Open VO CCD
                   </button>
                   <button
                     type="button"
                     onClick={() => executeAdminJump('/interview')}
-                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
+                    className="flex-1 py-2.5 bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-blue-500/25"
                   >
                     Open Window
                   </button>
@@ -366,41 +371,42 @@ export default function StudentFormPage() {
         </div>
       )}
 
-      {/* Main Dossier Container */}
-      <div className="max-w-3xl w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-6 md:p-9 shadow-2xl backdrop-blur-xl space-y-6 my-auto">
-        {/* Top Header */}
-        <div className="flex justify-between items-center border-b border-slate-800/80 pb-4">
-          <div className="flex items-center gap-3">
+      {/* Main Luxury Dossier Card */}
+      <div className="max-w-3xl w-full bg-[#0A0E1A]/90 border border-white/[0.08] rounded-3xl p-6 md:p-10 shadow-[0_0_50px_rgba(0,0,0,0.6)] backdrop-blur-2xl space-y-7 my-auto relative z-10">
+        
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-white/[0.08] pb-5">
+          <div className="flex items-center gap-3.5">
             {/* Double-Click Icon triggers Secret Admin Pass */}
             <div
               onDoubleClick={() => setShowAdminModal(true)}
-              className="w-11 h-11 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 cursor-pointer select-none transition hover:border-blue-400 hover:scale-105 active:scale-95"
+              className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600/20 to-indigo-600/10 border border-blue-500/30 flex items-center justify-center text-blue-400 cursor-pointer select-none transition hover:border-blue-400 hover:scale-105 active:scale-95 shadow-lg shadow-blue-500/10"
               title="Identity Badge"
             >
-              <UserCheck className="w-5 h-5" />
+              <UserCheck className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold tracking-tight text-white">F-1 Visa Case Intake Dossier</h1>
-                <span className="text-base select-none inline-block animate-pulse">🇺🇸</span>
+                <h1 className="text-xl font-bold tracking-tight text-white">F-1 Student Visa Dossier</h1>
+                <span className="text-base select-none inline-block filter drop-shadow">🇺🇸</span>
               </div>
-              <p className="text-xs text-slate-400">Kathmandu Consular Post • Adjudication System</p>
+              <p className="text-xs text-slate-400 font-medium">U.S. Embassy Kathmandu • Consular Adjudication System</p>
             </div>
           </div>
 
-          {/* Live U.S. Eastern Time Badge */}
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 border border-slate-700/70 rounded-xl text-xs font-mono text-slate-300">
+          {/* Live US Time Badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-xs font-mono text-slate-300 shadow-inner">
             <Clock className="w-3.5 h-3.5 text-blue-400" />
             <span>US Eastern: {usTime || 'Loading...'}</span>
           </div>
         </div>
 
-        {/* 2026 Directive */}
-        <div className="p-4 bg-rose-950/30 border border-rose-800/60 rounded-xl flex items-start gap-3">
+        {/* 2026 Directive Notice */}
+        <div className="p-4 bg-gradient-to-r from-rose-950/40 to-slate-900/40 border border-rose-800/50 rounded-2xl flex items-start gap-3.5 shadow-inner">
           <AlertOctagon className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
-            <div className="font-bold text-rose-200 uppercase tracking-wide">
-              Section 214(b) Presumption Notice
+            <div className="font-bold text-rose-200 tracking-wide uppercase text-[11px]">
+              Section 214(b) Presumption Directive
             </div>
             <p className="text-rose-300/80 leading-relaxed">
               Nepal F-1 refusal rates exceed <strong>81%</strong>. The Consular Officer is legally mandated to <strong>presume immigrant intent</strong>. The initial adjudicative stance is <strong>REJECTION</strong> until proven otherwise.
@@ -408,45 +414,48 @@ export default function StudentFormPage() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-7">
+          
           {/* Section 1: Identity */}
-          <div>
-            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
-              <span>1.</span> Personal Identity & Citizenship
-            </h2>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">01</span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">Personal Identity & Citizenship</h2>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Full Passport Name</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Full Passport Name</label>
                 <input
                   type="text"
                   required
                   placeholder="Enter full passport name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500/80 focus:bg-white/[0.04] transition"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Date of Birth</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Date of Birth</label>
                 <input
                   type="date"
                   required
                   value={dob}
                   onChange={(e) => handleDobChange(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/80 focus:bg-white/[0.04] transition"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-slate-300 mb-1">Citizenship District in Nepal</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Citizenship District in Nepal</label>
                 <select
                   required
                   value={district}
                   onChange={(e) => setDistrict(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[#080C16] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/80 transition"
                 >
-                  <option value="">Select your district...</option>
+                  <option value="">Select your permanent citizenship district...</option>
                   {NEPAL_DISTRICTS.map((d, i) => (
                     <option key={i} value={d}>{d}</option>
                   ))}
@@ -455,42 +464,44 @@ export default function StudentFormPage() {
             </div>
           </div>
 
-          {/* Section 2: Siblings & US Family Ties */}
-          <div className="p-4 bg-slate-800/40 border border-slate-700/60 rounded-xl space-y-3">
-            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase flex items-center gap-2">
-              <Users className="w-4 h-4" /> 2. Siblings & U.S. Family Ties
-            </h2>
-            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-200">
+          {/* Section 2: Siblings & US Family */}
+          <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">02</span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">Siblings & U.S. Family Ties</h2>
+            </div>
+
+            <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-300 pt-1">
               <input
                 type="checkbox"
                 checked={hasSiblings}
                 onChange={(e) => setHasSiblings(e.target.checked)}
-                className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700"
+                className="w-4 h-4 rounded text-blue-600 bg-slate-900 border-white/20"
               />
               <span>I have siblings (brother or sister)</span>
             </label>
 
             {hasSiblings && (
-              <div className="pl-6 space-y-3">
+              <div className="pl-6 space-y-3 pt-1">
                 <div className="w-44">
-                  <label className="block text-[11px] text-slate-400 mb-1">Total Siblings</label>
+                  <label className="block text-[11px] text-slate-400 mb-1">Total Number of Siblings</label>
                   <input
                     type="number"
                     min="1"
                     placeholder="e.g. 1 or 2"
                     value={siblingsCount}
                     onChange={(e) => setSiblingsCount(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+                    className="w-full bg-[#060A13] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
-                <div className="p-3 bg-rose-950/20 border border-rose-900/40 rounded-lg space-y-2">
+                <div className="p-3 bg-rose-950/20 border border-rose-900/40 rounded-xl space-y-2">
                   <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-rose-300">
                     <input
                       type="checkbox"
                       checked={hasSiblingInUS}
                       onChange={(e) => setHasSiblingInUS(e.target.checked)}
-                      className="w-4 h-4 rounded text-rose-600 bg-slate-800 border-rose-700"
+                      className="w-4 h-4 rounded text-rose-600 bg-slate-900 border-rose-700"
                     />
                     <span>⚠️ A sibling is currently living, studying, or working in the U.S.</span>
                   </label>
@@ -498,11 +509,11 @@ export default function StudentFormPage() {
                   {hasSiblingInUS && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                       <div>
-                        <label className="block text-[11px] text-slate-400 mb-1">Sibling's U.S. Status</label>
+                        <label className="block text-[11px] text-slate-400 mb-1">Sibling's Status</label>
                         <select
                           value={siblingUSStatus}
                           onChange={(e) => setSiblingUSStatus(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+                          className="w-full bg-[#060A13] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                         >
                           <option value="">Select status...</option>
                           <option value="F-1 Student">F-1 Student</option>
@@ -512,13 +523,13 @@ export default function StudentFormPage() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[11px] text-slate-400 mb-1">Details (e.g. Sister at UNT)</label>
+                        <label className="block text-[11px] text-slate-400 mb-1">Details (University / State)</label>
                         <input
                           type="text"
-                          placeholder="e.g. Sister studying in Texas"
+                          placeholder="e.g. Sister at UNT in Texas"
                           value={siblingUSDetails}
                           onChange={(e) => setSiblingUSDetails(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+                          className="w-full bg-[#060A13] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                         />
                       </div>
                     </div>
@@ -528,46 +539,48 @@ export default function StudentFormPage() {
             )}
           </div>
 
-          {/* Section 3: Academic Credentials & Tests */}
-          <div>
-            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
-              <FileCheck className="w-4 h-4" /> 3. Grades & Standardized Testing
-            </h2>
+          {/* Section 3: Academics */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">03</span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">Grades & Standardized Testing</h2>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Class 10 (SEE) GPA</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Class 10 (SEE) GPA</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. 3.65"
                   value={seeGpa}
                   onChange={(e) => setSeeGpa(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/80 transition"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Class 12 (+2 / High School) GPA</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Class 12 (+2 / High School) GPA</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. 3.45"
                   value={plusTwoGpa}
                   onChange={(e) => setPlusTwoGpa(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/80 transition"
                 />
               </div>
 
               {/* Mandatory English Test */}
-              <div className="p-3.5 bg-blue-950/20 border border-blue-900/40 rounded-xl md:col-span-2 space-y-2">
-                <div className="text-xs font-bold text-blue-300 uppercase">Mandatory English Proficiency Test</div>
+              <div className="p-4 bg-gradient-to-r from-blue-950/20 to-slate-900/30 border border-blue-900/40 rounded-2xl md:col-span-2 space-y-2">
+                <div className="text-[11px] font-bold text-blue-300 uppercase tracking-wide">Mandatory English Language Proficiency</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">Test Taken</label>
                     <select
                       value={englishTestType}
                       onChange={(e) => setEnglishTestType(e.target.value as any)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs focus:outline-none text-white"
+                      className="w-full bg-[#060A13] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                     >
                       <option value="IELTS">IELTS (Academic)</option>
                       <option value="PTE">PTE Academic</option>
@@ -580,29 +593,29 @@ export default function StudentFormPage() {
                     <input
                       type="text"
                       required
-                      placeholder="e.g. 6.5 (IELTS), 60 (PTE), 115 (DET)"
+                      placeholder="e.g. 6.5 (IELTS), 60 (PTE)"
                       value={englishTestScore}
                       onChange={(e) => setEnglishTestScore(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs focus:outline-none text-white"
+                      className="w-full bg-[#060A13] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                     />
                   </div>
                 </div>
               </div>
 
               {/* Optional Aptitude Test */}
-              <div className="p-3.5 bg-slate-800/30 border border-slate-700/60 rounded-xl md:col-span-2 space-y-2">
-                <div className="text-xs font-bold text-slate-300 uppercase">Optional Standardized Test (SAT / GRE)</div>
+              <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl md:col-span-2 space-y-2">
+                <div className="text-[11px] font-bold text-slate-300 uppercase tracking-wide">Optional Standardized Test (SAT / GRE)</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[11px] text-slate-400 mb-1">Test Taken</label>
                     <select
                       value={aptitudeTestType}
                       onChange={(e) => setAptitudeTestType(e.target.value as any)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs focus:outline-none text-white"
+                      className="w-full bg-[#060A13] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
                     >
                       <option value="None">None / Not Taken</option>
-                      <option value="SAT">SAT (Scholastic Aptitude)</option>
-                      <option value="GRE">GRE (Graduate Record Exam)</option>
+                      <option value="SAT">SAT</option>
+                      <option value="GRE">GRE</option>
                     </select>
                   </div>
                   <div>
@@ -610,10 +623,10 @@ export default function StudentFormPage() {
                     <input
                       type="text"
                       disabled={aptitudeTestType === 'None'}
-                      placeholder="e.g. 1320 (SAT) or 315 (GRE)"
+                      placeholder="e.g. 1320 (SAT)"
                       value={aptitudeTestScore}
                       onChange={(e) => setAptitudeTestScore(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs focus:outline-none text-white disabled:opacity-30"
+                      className="w-full bg-[#060A13] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none disabled:opacity-30"
                     />
                   </div>
                 </div>
@@ -622,13 +635,15 @@ export default function StudentFormPage() {
           </div>
 
           {/* Section 4: Target US Program */}
-          <div>
-            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
-              <GraduationCap className="w-4 h-4" /> 4. Target U.S. Academic Program
-            </h2>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">04</span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">Target U.S. Academic Program</h2>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="relative" ref={uniRef}>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Target University</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Target University</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -637,12 +652,12 @@ export default function StudentFormPage() {
                     value={targetUni}
                     onChange={(e) => handleUniChange(e.target.value)}
                     onFocus={() => targetUni && setShowUniDropdown(true)}
-                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-3.5 pr-8 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                    className="w-full bg-white/[0.02] border border-white/10 rounded-xl pl-4 pr-9 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/80 transition"
                   />
-                  <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+                  <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5 pointer-events-none" />
                 </div>
                 {showUniDropdown && filteredUnis.length > 0 && (
-                  <ul className="absolute z-50 left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl text-xs">
+                  <ul className="absolute z-50 left-0 right-0 mt-1.5 max-h-52 overflow-y-auto bg-[#0A0E1A] border border-white/15 rounded-2xl shadow-2xl text-xs">
                     {filteredUnis.map((uni, idx) => (
                       <li
                         key={idx}
@@ -650,7 +665,7 @@ export default function StudentFormPage() {
                           setTargetUni(uni);
                           setShowUniDropdown(false);
                         }}
-                        className="px-3.5 py-2.5 hover:bg-blue-600 hover:text-white cursor-pointer border-b border-slate-800/80 last:border-0"
+                        className="px-4 py-2.5 hover:bg-blue-600 hover:text-white cursor-pointer border-b border-white/[0.05] last:border-0 text-slate-200"
                       >
                         {uni}
                       </li>
@@ -660,7 +675,7 @@ export default function StudentFormPage() {
               </div>
 
               <div className="relative" ref={majorRef}>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Target Major</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Target Major</label>
                 <div className="relative">
                   <input
                     type="text"
@@ -669,12 +684,12 @@ export default function StudentFormPage() {
                     value={major}
                     onChange={(e) => handleMajorChange(e.target.value)}
                     onFocus={() => major && setShowMajorDropdown(true)}
-                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-3.5 pr-8 py-2.5 text-sm focus:outline-none focus:border-blue-500"
+                    className="w-full bg-white/[0.02] border border-white/10 rounded-xl pl-4 pr-9 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/80 transition"
                   />
-                  <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
+                  <Search className="w-4 h-4 text-slate-400 absolute right-3.5 top-3.5 pointer-events-none" />
                 </div>
                 {showMajorDropdown && filteredMajors.length > 0 && (
-                  <ul className="absolute z-50 left-0 right-0 mt-1 max-h-52 overflow-y-auto bg-slate-900 border border-slate-700 rounded-xl shadow-2xl text-xs">
+                  <ul className="absolute z-50 left-0 right-0 mt-1.5 max-h-52 overflow-y-auto bg-[#0A0E1A] border border-white/15 rounded-2xl shadow-2xl text-xs">
                     {filteredMajors.map((m, idx) => (
                       <li
                         key={idx}
@@ -682,7 +697,7 @@ export default function StudentFormPage() {
                           setMajor(m);
                           setShowMajorDropdown(false);
                         }}
-                        className="px-3.5 py-2.5 hover:bg-blue-600 hover:text-white cursor-pointer border-b border-slate-800/80 last:border-0"
+                        className="px-4 py-2.5 hover:bg-blue-600 hover:text-white cursor-pointer border-b border-white/[0.05] last:border-0 text-slate-200"
                       >
                         {m}
                       </li>
@@ -692,12 +707,12 @@ export default function StudentFormPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Degree Level</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Degree Level</label>
                 <select
                   required
                   value={degreeLevel}
                   onChange={(e) => setDegreeLevel(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                  className="w-full bg-[#080C16] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/80 transition"
                 >
                   <option value="">Select degree level...</option>
                   <option value="Undergraduate">Undergraduate (Bachelor&apos;s)</option>
@@ -707,14 +722,14 @@ export default function StudentFormPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Study Gap (Years)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Study Gap (Years)</label>
                 <input
                   type="number"
                   min="0"
                   placeholder="0"
                   value={gapYears}
                   onChange={(e) => setGapYears(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                  className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500/80 transition"
                 />
               </div>
             </div>
@@ -722,12 +737,13 @@ export default function StudentFormPage() {
 
           {/* Section 5: Financials & I-20 Toggle */}
           <div className="space-y-4">
-            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase flex items-center gap-2">
-              <DollarSign className="w-4 h-4" /> 5. Institutional Costs & Sponsorship
-            </h2>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">05</span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">Institutional Costs & Sponsorship</h2>
+            </div>
 
-            {/* I-20 Status Toggle */}
-            <div className="p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl flex items-center justify-between">
+            {/* I-20 Toggle */}
+            <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl flex items-center justify-between">
               <div className="flex items-center gap-2.5 text-xs text-slate-200">
                 <FileQuestion className="w-4 h-4 text-blue-400" />
                 <span>Do you currently hold an officially issued I-20 document?</span>
@@ -739,7 +755,7 @@ export default function StudentFormPage() {
                   onChange={(e) => setHasI20(e.target.checked)}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                <div className="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
               </label>
             </div>
 
@@ -747,30 +763,30 @@ export default function StudentFormPage() {
               <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Gross Annual I-20 Cost ($)</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Gross Annual I-20 Cost ($)</label>
                     <input
                       type="number"
                       required
                       placeholder="e.g. 34000"
                       value={grossI20}
                       onChange={(e) => setGrossI20(e.target.value)}
-                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                      className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Annual Scholarship ($)</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">Annual Scholarship ($)</label>
                     <input
                       type="number"
                       placeholder="0"
                       value={scholarship}
                       onChange={(e) => setScholarship(e.target.value)}
-                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                      className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
                     />
                   </div>
                 </div>
 
-                <div className="p-3.5 bg-slate-800/50 border border-slate-700/60 rounded-xl flex justify-between items-center text-xs">
+                <div className="p-4 bg-white/[0.02] border border-white/[0.07] rounded-2xl flex justify-between items-center text-xs">
                   <span className="text-slate-300 flex items-center gap-2">
                     <Calculator className="w-4 h-4 text-emerald-400" /> Net Annual Tuition Payable:
                   </span>
@@ -778,7 +794,7 @@ export default function StudentFormPage() {
                 </div>
               </div>
             ) : (
-              <div className="p-3 bg-blue-950/20 border border-blue-900/40 rounded-xl text-xs text-blue-300 flex items-center gap-2">
+              <div className="p-3.5 bg-blue-950/20 border border-blue-900/40 rounded-xl text-xs text-blue-300 flex items-center gap-2">
                 <span>ℹ️</span>
                 <span>Pre-I-20 Mode: The Consular Officer will evaluate based on your university choice and stated budget.</span>
               </div>
@@ -786,17 +802,19 @@ export default function StudentFormPage() {
           </div>
 
           {/* Section 6: Sponsorship */}
-          <div>
-            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
-              <Building2 className="w-4 h-4" /> 6. Sponsorship & Employment
-            </h2>
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">06</span>
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-200">Sponsorship & Employment</h2>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Primary Sponsor</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Primary Sponsor</label>
                 <select
                   value={primarySponsor}
                   onChange={(e) => setPrimarySponsor(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                  className="w-full bg-[#080C16] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
                 >
                   <option value="Father">Father</option>
                   <option value="Mother">Mother</option>
@@ -807,12 +825,12 @@ export default function StudentFormPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Sponsor Category</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Sponsor Category</label>
                 <select
                   required
                   value={sponsorOccupation}
                   onChange={(e) => setSponsorOccupation(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                  className="w-full bg-[#080C16] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
                 >
                   <option value="">Select official category...</option>
                   {NEPAL_OCCUPATIONS.map((occ, idx) => (
@@ -822,7 +840,7 @@ export default function StudentFormPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Family Annual Income (NPR)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Family Annual Income (NPR)</label>
                 <input
                   type="number"
                   step="50000"
@@ -830,18 +848,18 @@ export default function StudentFormPage() {
                   placeholder="e.g. 2400000 (24 Lakhs)"
                   value={annualIncomeNPR}
                   onChange={(e) => setAnnualIncomeNPR(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                  className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Designation / Rank</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">Designation / Rank</label>
                 <input
                   type="text"
                   placeholder="e.g. Joint Secretary, Managing Director"
                   value={sponsorSubDetails}
                   onChange={(e) => setSponsorSubDetails(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                  className="w-full bg-white/[0.02] border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none"
                 />
               </div>
             </div>
@@ -849,22 +867,22 @@ export default function StudentFormPage() {
 
           <button
             type="submit"
-            className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 transition cursor-pointer"
+            className="w-full py-4 bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-xl shadow-blue-500/25 transition cursor-pointer text-sm"
           >
             <span>Lock Dossier & Open Consular CCD Monitor</span>
-            <ArrowRight className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4" />
           </button>
         </form>
       </div>
 
-      {/* Premium Footer */}
-      <footer className="w-full max-w-3xl mt-8 pt-4 border-t border-slate-800/80 flex flex-col md:flex-row justify-between items-center text-[11px] text-slate-500 gap-2">
+      {/* Luxury Footer */}
+      <footer className="w-full max-w-3xl mt-8 pt-4 border-t border-white/[0.06] flex flex-col md:flex-row justify-between items-center text-[11px] text-slate-500 gap-2 z-10">
         <div className="flex items-center gap-2">
           <span>🇺🇸</span>
-          <span>Official U.S. Consular Simulation Service • Kathmandu Post</span>
+          <span>U.S. Embassy Consular Simulation Engine • Kathmandu Post</span>
         </div>
         <div>
-          © 2026 INA 214(b) Adjudication Engine. All rights reserved.
+          © 2026 INA 214(b) Adjudication System. All rights reserved.
         </div>
       </footer>
     </main>
