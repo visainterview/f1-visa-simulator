@@ -7,14 +7,14 @@ export async function POST(req: Request) {
 
     if (!geminiKey) {
       return NextResponse.json({
-        reply: `[SYSTEM ERROR]: GEMINI_API_KEY is not detected in Vercel.`,
+        reply: `[SYSTEM ERROR]: GEMINI_API_KEY is not detected in Vercel Environment Variables.`,
         isConcluded: false,
       });
     }
 
     const netCost = profile.hasI20
       ? `$${Number(profile.netI20PayableUSD || 28000).toLocaleString()}/year`
-      : 'Estimated Tuition (Pre-I-20 stage)';
+      : 'Estimated Cost (Pre-I-20 stage)';
     const incomeLakhs = (Number(profile.annualFamilyIncomeNPR || 0) / 100000).toFixed(1);
     const rawAnswer = (latestStudentAnswer || '').trim();
     const voTurns = conversationHistory.filter((m: any) => m.sender === 'vo').length;
@@ -44,7 +44,7 @@ STRICT ADJUDICATION RULES:
    - If refusing: include exact phrase "refused under Section 214(b)".
 `;
 
-    // Format chat history for Gemini (Alternating user and model)
+    // Format chat history for Gemini API (Alternating user and model)
     const contents: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
 
     for (const msg of conversationHistory) {
@@ -65,9 +65,9 @@ STRICT ADJUDICATION RULES:
       parts: [{ text: rawAnswer }],
     });
 
-    // SINGLE MODEL ONLY: gemini-2.5-flash
+    // SINGLE VERIFIED MODEL: gemini-3.6-flash
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,7 +76,7 @@ STRICT ADJUDICATION RULES:
           contents,
           generationConfig: {
             temperature: 0.4,
-            maxOutputTokens: 60,
+            maxOutputTokens: 70,
           },
         }),
       }
