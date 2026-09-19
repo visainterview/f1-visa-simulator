@@ -3,103 +3,135 @@ import { NextResponse } from 'next/server';
 export async function POST(req: Request) {
   try {
     const { profile, conversationHistory, latestStudentAnswer } = await req.json();
-    const groqKey = process.env.GROQ_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY;
+
+    if (!geminiKey) {
+      return NextResponse.json({
+        reply: `[SYSTEM ERROR]: GEMINI_API_KEY is not detected in Vercel Environment Variables.`,
+        isConcluded: false,
+      });
+    }
 
     const netCost = profile.hasI20
-      ? `$${Number(profile.netI20PayableUSD || 28000).toLocaleString()}`
-      : 'estimated budget';
+      ? `$${Number(profile.netI20PayableUSD || 28000).toLocaleString()}/year`
+      : 'Estimated Cost (Pre-I-20 stage)';
     const incomeLakhs = (Number(profile.annualFamilyIncomeNPR || 0) / 100000).toFixed(1);
     const rawAnswer = (latestStudentAnswer || '').trim();
     const voTurns = conversationHistory.filter((m: any) => m.sender === 'vo').length;
 
-    // Compact, token-efficient consular system prompt
-    const systemPrompt = `You are a strict, skeptical US Consular Officer at Window 3, US Embassy Kathmandu. 
-Adjudicating F-1 visa under INA 214(b). 
-APPLICANT: ${profile.fullName}, ${profile.age}y. Uni: ${profile.targetUniversity} (${profile.major}). 
-Net Tuition: ${netCost}/yr. Declared Family Income: NPR ${incomeLakhs} Lakhs/yr. 
-Sponsor: ${profile.primarySponsor} (${profile.sponsorOccupation}). 
-Sibling in US: ${profile.hasSiblingInUS ? `YES (${profile.siblingUSStatus || 'US'})` : 'NO'}.
-RULES:
-1. Ask exactly ONE short, skeptical question under 18 words.
-2. Cross-examine gaps: father's liquid bank proof, sibling in the US, or university choice.
-3. If they give vague or 2-word answers, challenge their lack of documentation.
-4. If approved: include "visa is approved". If refused: include "refused under Section 214(b)".`;
+    // 100% Organic Consular Cross-Examination Directive
+    const systemInstruction = `
+You are a real, strict U.S. Consular Officer conducting an authentic in-person F-1 student visa interview at Window #03 at the U.S. Embassy in Kathmandu, Nepal.
+You have 60 seconds to cross-examine and adjudicate this applicant under Section 214(b) of the INA.
 
-    // Only send the last 4 messages to save 80% token quota
-    const recentMessages = conversationHistory.slice(-4).map((m: any) => ({
-      role: m.sender === 'vo' ? 'assistant' : 'user',
-      content: m.text,
-    }));
+APPLICANT'S DOSSIER:
+- Name: ${profile.fullName} (${profile.age} yrs, District: ${profile.address})
+- Target University: ${profile.targetUniversity} (${profile.degreeLevel || 'Undergrad'} in ${profile.major})
+- Has Official I-20?: ${profile.hasI20 ? `YES (Net Tuition: ${netCost})` : 'NO (Pre-I-20 stage)'}
+- English Test: ${profile.englishTestType} (Score: ${profile.englishTestScore})
+- Aptitude Test: ${profile.aptitudeTestType} (${profile.aptitudeTestScore || 'None'})
+- High School: +2 GPA: ${profile.plusTwoGpa || 'N/A'}, SEE GPA: ${profile.seeGpa || 'N/A'}
+- Sibling in US: ${profile.hasSiblingInUS ? `YES (${profile.siblingUSStatus || 'Resident'} in USA - "${profile.siblingUSDetails || 'In USA'}") [HIGH IMMIGRANT INTENT FLAG]` : 'None'}
+- Declared Income: NPR ${incomeLakhs} Lakhs/year
+- Sponsor: ${profile.primarySponsor} (${profile.sponsorOccupation} - "${profile.sponsorSubDetails || 'None'}")
+- Prior Refusal: ${profile.hasPriorRefusal ? 'YES (Section 214b on record)' : 'None'}
+- Current Interview Turn: ${voTurns + 1}
 
-    const messages = [
-      { role: 'system', content: systemPrompt },
-      ...recentMessages,
-      { role: 'user', content: rawAnswer },
+MANDATORY RULES:
+1. Generate 100% of your own questions organically. Do NOT follow any standard list.
+2. Ask exactly ONE short, skeptical, direct question at a time (under 18 words).
+3. Directly cross-examine what the applicant just said:
+   - If they have a sibling in the US, drill why they are traveling to the US instead of staying in Nepal.
+   - If they give vague or nonchalant answers ("cause its good", "ask her"), challenge their attitude directly.
+   - If their family income cannot sustain ${netCost}, demand proof of liquid bank funds.
+4. ADJUDICATION VERDICT:
+   - If you decide to approve, include the exact phrase: "visa is approved".
+   - If you decide to refuse, include the exact phrase: "refused under Section 214(b)".
+`;
+
+    // Format conversation history for Gemini API
+    const contents: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
+
+    for (const msg of conversationHistory) {
+      if (contents.length === 0 && msg.sender === 'vo') {
+        contents.push({
+          role: 'user',
+          parts: [{ text: '[Candidate approaches counter]' }],
+        });
+      }
+      contents.push({
+        role: msg.sender === 'vo' ? 'model' : 'user',
+        parts: [{ text: msg.text }],
+      });
+    }
+
+    contents.push({
+      role: 'user',
+      parts: [{ text: rawAnswer }],
+    });
+
+    // Gemini Flash Model Priority List
+    const geminiModels = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
     ];
 
-    if (groqKey) {
+    let reply = '';
+    let lastError = '';
+
+    for (const model of geminiModels) {
       try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${groqKey}`,
-          },
-          body: JSON.stringify({
-            model: 'openai/gpt-oss-20b',
-            messages,
-            temperature: 0.35,
-            max_tokens: 80,
-          }),
-        });
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: systemInstruction }] },
+              contents,
+              generationConfig: {
+                temperature: 0.65,
+                maxOutputTokens: 80,
+              },
+            }),
+          }
+        );
 
         if (res.ok) {
           const data = await res.json();
-          const reply = data.choices?.[0]?.message?.content?.trim();
-          if (reply) {
-            const isApproved = reply.toLowerCase().includes('approved');
-            const isRefused =
-              reply.toLowerCase().includes('214(b)') ||
-              reply.toLowerCase().includes('refused') ||
-              reply.toLowerCase().includes('refusing');
-
-            return NextResponse.json({
-              reply,
-              isConcluded: isApproved || isRefused,
-              verdict: isApproved ? 'APPROVED' : isRefused ? 'REFUSED' : undefined,
-            });
-          }
+          reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (reply) break;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          lastError = errData.error?.message || res.statusText;
         }
-      } catch (_) {
-        // Silently fall through to contextual consular failover without exposing API logs
+      } catch (err: any) {
+        lastError = err.message;
       }
     }
 
-    // Contextual Consular Failover (Never displays code errors to users)
-    const lower = rawAnswer.toLowerCase();
-    let fallbackReply = '';
-
-    if (lower.includes('no') || lower.includes('idk') || lower.length < 4) {
-      fallbackReply = `If you cannot produce verifiable financial documentation, how can this consulate confirm these funds exist?`;
-    } else if (profile.hasSiblingInUS && voTurns <= 2) {
-      fallbackReply = `Your sibling is already in the United States. What permanent career ties compel you to return to Nepal?`;
-    } else if (voTurns >= 4) {
+    if (!reply) {
       return NextResponse.json({
-        reply: `You have failed to provide adequate documentation or overcome the presumption of immigrant intent. Your visa is refused under Section 214(b).`,
-        isConcluded: true,
-        verdict: 'REFUSED',
+        reply: `[GEMINI API ERROR]: ${lastError}`,
+        isConcluded: false,
       });
-    } else {
-      fallbackReply = `What specific career position in Nepal will you secure that justifies spending ${netCost} annually?`;
     }
 
+    const isApproved = reply.toLowerCase().includes('approved');
+    const isRefused =
+      reply.toLowerCase().includes('214(b)') ||
+      reply.toLowerCase().includes('refused') ||
+      reply.toLowerCase().includes('refusing');
+
     return NextResponse.json({
-      reply: fallbackReply,
-      isConcluded: false,
+      reply,
+      isConcluded: isApproved || isRefused,
+      verdict: isApproved ? 'APPROVED' : isRefused ? 'REFUSED' : undefined,
     });
   } catch (error: any) {
     return NextResponse.json({
-      reply: 'Please state clearly how your family plans to liquidate funds for your university expenses.',
+      reply: `[SERVER EXCEPTION]: ${error.message}`,
       isConcluded: false,
     });
   }
