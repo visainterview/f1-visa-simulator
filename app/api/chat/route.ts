@@ -7,7 +7,7 @@ export async function POST(req: Request) {
 
     if (!groqKey) {
       return NextResponse.json({
-        reply: `[SYSTEM ERROR]: GROQ_API_KEY is not detected in Vercel.`,
+        reply: `[SYSTEM ERROR]: GROQ_API_KEY is not detected in Vercel Environment Variables.`,
         isConcluded: false,
       });
     }
@@ -17,29 +17,37 @@ export async function POST(req: Request) {
     const rawAnswer = (latestStudentAnswer || '').trim();
     const voTurns = conversationHistory.filter((m: any) => m.sender === 'vo').length;
 
+    // Strict Cross-Examination System Prompt
     const systemPrompt = `
-You are an experienced, professional, skeptical U.S. Consular Officer (VO) conducting an in-person F-1 Visa interview at Window 3 at the U.S. Embassy in Kathmandu, Nepal.
-You think, speak, and react like a living human diplomat. You do NOT follow a script.
+You are an experienced, strict US Consular Officer conducting an in-person F-1 Student Visa interview at the U.S. Embassy in Kathmandu, Nepal.
 
-APPLICANT DOSSIER:
-- Name: ${profile.fullName} (${profile.age} yrs, District: ${profile.address})
-- Target University: ${profile.targetUniversity} (${profile.degreeLevel || 'Undergrad'} in ${profile.major})
+The applicant has provided their key background application details below. You must cross-examine them based strictly on that information. 
+
+DO NOT ask generic questions sequentially. Instead, look for potential gaps or red flags in their background (e.g., funding deficit, ties to Nepal, sibling in the US, low high school GPA, specific university choice). 
+
+Ask ONE short, direct, skeptical question at a time. Analyze their response and ask an organic, unique follow-up question based directly on what they just said.
+
+APPLICANT'S BACKGROUND DOSSIER:
+- Name: ${profile.fullName} (${profile.age} yrs old, District: ${profile.address})
+- Target University: ${profile.targetUniversity} (${profile.degreeLevel || 'Undergraduate'} in ${profile.major})
 - High School Academics: +2 GPA: ${profile.plusTwoGpa || 'N/A'}, SEE GPA: ${profile.seeGpa || 'N/A'}
-- Test: ${profile.testType || 'None'} ${profile.testScore || ''}
-- Sibling in the US: ${profile.hasSiblingInUS ? `YES (${profile.siblingUSStatus || 'Resident'} in USA)` : 'No'}
-- Net Tuition: $${netCost}/year (Declared Family Income: NPR ${incomeLakhs} Lakhs/yr)
-- Sponsor: ${profile.primarySponsor} (${profile.sponsorOccupation} - "${profile.sponsorSubDetails || 'None'}")
-- Prior Refusals: ${profile.hasPriorRefusal ? 'YES (Section 214b)' : 'None'}
-- Current Turn: ${voTurns + 1}
+- Language Test: ${profile.testType || 'None'} ${profile.testScore || ''}
+- Sibling in the US: ${profile.hasSiblingInUS ? `YES (${profile.siblingUSStatus || 'Resident'} in USA - ${profile.siblingUSDetails || ''}) [CRITICAL IMMIGRANT INTENT FLAG]` : 'None'}
+- Net Tuition Payable: $${netCost}/year
+- Family Annual Income: NPR ${incomeLakhs} Lakhs/year
+- Primary Sponsor: ${profile.primarySponsor} (${profile.sponsorOccupation} - "${profile.sponsorSubDetails || 'None'}")
+- Prior Refusal: ${profile.hasPriorRefusal ? 'YES (Section 214b on record)' : 'None'}
+- Current Question Turn: ${voTurns + 1}
 
-BEHAVIOR RULES:
-1. Speak in 1 or 2 concise, natural sentences max.
-2. React realistically to whatever the applicant says:
-   - If they say "cause its good" or give lazy answers: Challenge them directly: "What specifically is good about it? That tells me nothing about your academic purpose."
-   - If they have a sibling in the US: Challenge why they aren't staying in Nepal with their family.
-   - If they are flippant or rude: React with authority: "You are the applicant standing at this window. Watch your tone."
-3. If you decide to approve, include: "visa is approved".
-4. If you decide to refuse, include: "refused under Section 214(b)".
+INTERVIEW CONVERSATION RULES:
+1. Ask exactly ONE short, direct question at a time. Keep it under 2 sentences.
+2. Cross-examine aggressively:
+   - If they say "cause its good" or give lazy answers, call them out immediately: "What specifically is good about it? That tells me nothing about your academic purpose."
+   - If they have a sibling in the US, drill into why they are traveling to the US instead of staying in Nepal with family.
+   - If their family income cannot sustain $${netCost}/year, demand to know the exact liquid bank source.
+3. ADJUDICATION CONCLUSION:
+   - If the applicant is flippant, disrespectful, or fails to prove ties, conclude with: "refused under Section 214(b)".
+   - If the applicant convincingly justifies their funding and clear academic ties after 3 to 4 turns, conclude with: "visa is approved".
 `;
 
     const messages = [
@@ -51,50 +59,32 @@ BEHAVIOR RULES:
       { role: 'user', content: rawAnswer },
     ];
 
-    // List of 100% free models on Groq
-    const modelsToTry = [
-      'llama-3.1-8b-instant',
-      'gemma2-9b-it'
-    ];
+    // Primary Call: llama-3.1-8b-instant (Fast, Active, 100% Free on Groq)
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${groqKey}`,
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        messages,
+        temperature: 0.5,
+        max_tokens: 120,
+      }),
+    });
 
-    let reply = '';
-    let lastError = '';
-
-    for (const modelName of modelsToTry) {
-      try {
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${groqKey}`,
-          },
-          body: JSON.stringify({
-            model: modelName,
-            messages,
-            temperature: 0.6,
-            max_tokens: 120,
-          }),
-        });
-
-        if (res.ok) {
-          const data = await res.json();
-          reply = data.choices?.[0]?.message?.content?.trim();
-          if (reply) break;
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          lastError = errData.error?.message || res.statusText;
-        }
-      } catch (e: any) {
-        lastError = e.message;
-      }
-    }
-
-    if (!reply) {
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      const errMsg = errData.error?.message || res.statusText;
       return NextResponse.json({
-        reply: `[GROQ API ERROR]: ${lastError}`,
+        reply: `[GROQ API ERROR ${res.status}]: ${errMsg}. Check your key in Vercel.`,
         isConcluded: false,
       });
     }
+
+    const data = await res.json();
+    const reply = data.choices?.[0]?.message?.content?.trim();
 
     const isApproved = reply.toLowerCase().includes('approved');
     const isRefused =
