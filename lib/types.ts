@@ -23,23 +23,28 @@ export interface StudentProfile {
   address: string;
   country: string;
 
-  // Siblings & Family Ties in Nepal / US
+  // Siblings & US Family Ties
   hasSiblings: boolean;
   siblingsCount: number | '';
   hasSiblingInUS: boolean;
-  siblingUSStatus?: 'F-1 Student' | 'OPT' | 'H-1B Worker' | 'Green Card / Citizen' | 'Other' | '';
+  siblingUSStatus?: string;
   siblingUSDetails?: string;
 
   // Academics in Nepal
   seeGpa?: string;
   plusTwoGpa?: string;
-  nepalGpa?: string;
   currentEducation?: string;
-  testType?: 'IELTS' | 'PTE' | 'TOEFL' | 'Duolingo' | 'SAT' | 'GRE' | 'None' | string;
-  testScore?: string;
   gapYears?: any;
 
-  // Target US Study
+  // Mandatory English Language Test
+  englishTestType: 'IELTS' | 'PTE' | 'Duolingo' | 'TOEFL';
+  englishTestScore: string;
+
+  // Optional Standardized Aptitude Test
+  aptitudeTestType: 'SAT' | 'GRE' | 'None';
+  aptitudeTestScore?: string;
+
+  // Target US Program
   targetUniversity: string;
   degreeLevel?: string;
   major: string;
@@ -56,7 +61,7 @@ export interface StudentProfile {
   annualFamilyIncomeNPR?: any;
   totalLiquidSavingsUSD?: any;
 
-  // History
+  // Prior Refusal
   hasPriorRefusal?: boolean;
   priorRefusalDetails?: string;
 }

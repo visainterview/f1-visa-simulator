@@ -4,6 +4,9 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { StudentProfile } from '@/lib/types';
 import { US_UNIVERSITIES, MAJORS_LIST, NEPAL_OCCUPATIONS, NEPAL_DISTRICTS } from '@/lib/universityData';
+import { db, auth, googleProvider } from '@/lib/firebase';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { signInWithPopup } from 'firebase/auth';
 import {
   ShieldAlert,
   ArrowRight,
@@ -15,30 +18,47 @@ import {
   Search,
   Building2,
   FileCheck,
-  Users
+  Users,
+  Zap,
+  KeyRound,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 
 export default function StudentFormPage() {
   const router = useRouter();
+
+  // Admin Modal & Firebase Verification State
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminSecret, setAdminSecret] = useState('');
+  const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(false);
+  const [adminVerified, setAdminVerified] = useState(false);
+  const [adminError, setAdminError] = useState('');
 
   // Personal
   const [fullName, setFullName] = useState('');
   const [dob, setDob] = useState('');
   const [district, setDistrict] = useState('');
 
-  // Siblings & Family Ties
+  // Siblings & US Ties
   const [hasSiblings, setHasSiblings] = useState(false);
   const [siblingsCount, setSiblingsCount] = useState('');
   const [hasSiblingInUS, setHasSiblingInUS] = useState(false);
   const [siblingUSStatus, setSiblingUSStatus] = useState<any>('');
   const [siblingUSDetails, setSiblingUSDetails] = useState('');
 
-  // Academics in Nepal
+  // Academics
   const [seeGpa, setSeeGpa] = useState('');
   const [plusTwoGpa, setPlusTwoGpa] = useState('');
-  const [testType, setTestType] = useState<any>('PTE');
-  const [testScore, setTestScore] = useState('');
   const [gapYears, setGapYears] = useState('');
+
+  // Mandatory English Test
+  const [englishTestType, setEnglishTestType] = useState<'IELTS' | 'PTE' | 'Duolingo' | 'TOEFL'>('IELTS');
+  const [englishTestScore, setEnglishTestScore] = useState('');
+
+  // Optional Aptitude Test
+  const [aptitudeTestType, setAptitudeTestType] = useState<'SAT' | 'GRE' | 'None'>('None');
+  const [aptitudeTestScore, setAptitudeTestScore] = useState('');
 
   // Target US Study
   const [targetUni, setTargetUni] = useState('');
@@ -57,7 +77,7 @@ export default function StudentFormPage() {
   const [hasPriorRefusal, setHasPriorRefusal] = useState(false);
   const [priorRefusalDetails, setPriorRefusalDetails] = useState('');
 
-  // Dropdown states
+  // Autocomplete
   const [filteredUnis, setFilteredUnis] = useState<string[]>([]);
   const [showUniDropdown, setShowUniDropdown] = useState(false);
   const [filteredMajors, setFilteredMajors] = useState<string[]>([]);
@@ -119,35 +139,119 @@ export default function StudentFormPage() {
   const scholarshipNum = Number(scholarship) || 0;
   const netPayableUSD = Math.max(0, grossNum - scholarshipNum);
 
+  // 1. VERIFY ADMIN CREDENTIALS AGAINST FIRESTORE (Zero hardcoded secrets)
+  const handleVerifyAdminPasscode = async () => {
+    if (!adminSecret.trim()) return;
+    setIsVerifyingAdmin(true);
+    setAdminError('');
+
+    try {
+      // Query Firestore collection 'users' to check if role or email matches
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('role', '==', adminSecret.trim()));
+      const snap = await getDocs(q);
+
+      if (!snap.empty) {
+        setAdminVerified(true);
+      } else {
+        // Also check if admin typed the email field from Firestore
+        const qEmail = query(usersRef, where('email', '==', adminSecret.trim()));
+        const snapEmail = await getDocs(qEmail);
+        if (!snapEmail.empty) {
+          setAdminVerified(true);
+        } else {
+          setAdminError('Access Denied: Unrecognized Admin Secret in Firestore');
+        }
+      }
+    } catch (err: any) {
+      console.error(err);
+      setAdminError(`Firestore error: ${err.message}`);
+    } finally {
+      setIsVerifyingAdmin(false);
+    }
+  };
+
+  // 2. GOOGLE 1-CLICK ADMIN LOGIN
+  const handleGoogleAdminLogin = async () => {
+    setIsVerifyingAdmin(true);
+    setAdminError('');
+    try {
+      const res = await signInWithPopup(auth, googleProvider);
+      const email = res.user.email;
+
+      // Check if logged in user is admin in Firestore or matches support email
+      const usersRef = collection(db, 'users');
+      const q = query(usersRef, where('email', '==', email));
+      const snap = await getDocs(q);
+
+      if (!snap.empty || email === 'movipff@gmail.com') {
+        setAdminVerified(true);
+      } else {
+        setAdminError(`Logged in as ${email}, but this account is not registered as Admin in Firestore.`);
+      }
+    } catch (err: any) {
+      setAdminError(`Google Auth Error: ${err.message}`);
+    } finally {
+      setIsVerifyingAdmin(false);
+    }
+  };
+
+  // 3. EXECUTE ADMIN BYPASS JUMP
+  const executeAdminJump = (destination: '/vo-panel' | '/interview') => {
+    const adminTestProfile: StudentProfile = {
+      fullName: 'Admin Test Candidate',
+      dob: '2004-02-15',
+      age: 21,
+      isMinor: false,
+      address: 'Kathmandu, Nepal',
+      country: 'Nepal',
+      hasSiblings: true,
+      siblingsCount: 1,
+      hasSiblingInUS: true,
+      siblingUSStatus: 'F-1 Student',
+      siblingUSDetails: 'Sister studying Computer Science at UNT',
+      seeGpa: '3.80',
+      plusTwoGpa: '3.65',
+      englishTestType: 'IELTS',
+      englishTestScore: '6.5',
+      aptitudeTestType: 'SAT',
+      aptitudeTestScore: '1340',
+      gapYears: 0,
+      targetUniversity: 'University of North Texas',
+      degreeLevel: 'Undergraduate',
+      major: 'Computer Engineering',
+      grossI20CostUSD: 34000,
+      scholarshipUSD: 10000,
+      netI20PayableUSD: 24000,
+      primarySponsor: 'Father',
+      sponsorOccupation: 'Government Officer (Gazetted / Civil Service)',
+      sponsorSubDetails: 'Section Officer at Ministry of Finance',
+      annualFamilyIncomeNPR: 2800000,
+      hasPriorRefusal: false,
+    };
+
+    localStorage.setItem('f1_applicant_profile', JSON.stringify(adminTestProfile));
+    setShowAdminModal(false);
+    router.push(destination);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!fullName.trim() || !dob) {
-      alert('Please enter your full legal name and date of birth.');
-      return;
-    }
-    if (!district) {
-      alert('Please select your citizenship district in Nepal.');
+    if (!fullName.trim() || !dob || !district) {
+      alert('Please fill out your identity and district.');
       return;
     }
     if (!targetUni.trim() || !major.trim() || !degreeLevel) {
-      alert('Please select your target U.S. university, degree level, and major.');
+      alert('Please enter your target US institution and major.');
       return;
     }
-    if (!plusTwoGpa || !seeGpa) {
-      alert('Please enter your Class 10 (SEE) and Class 12 (+2) GPAs.');
+    if (!englishTestScore) {
+      alert('Please provide your mandatory English proficiency score.');
       return;
     }
-    if (!sponsorOccupation) {
-      alert('Please select your sponsor’s official occupation category.');
-      return;
-    }
-    if (!grossI20) {
-      alert('Please enter your total annual Gross I-20 cost.');
-      return;
-    }
-    if (!annualIncomeNPR) {
-      alert('Please enter your family annual income in NPR.');
+    if (!sponsorOccupation || !grossI20 || !annualIncomeNPR) {
+      alert('Please complete the financial section.');
       return;
     }
 
@@ -169,8 +273,10 @@ export default function StudentFormPage() {
       seeGpa: seeGpa.trim(),
       plusTwoGpa: plusTwoGpa.trim(),
       currentEducation: '+2 High School',
-      testType,
-      testScore: testScore.trim() || 'N/A',
+      englishTestType,
+      englishTestScore: englishTestScore.trim(),
+      aptitudeTestType,
+      aptitudeTestScore: aptitudeTestScore.trim(),
       gapYears: gapYears === '' ? 0 : Number(gapYears),
       targetUniversity: targetUni.trim(),
       degreeLevel,
@@ -182,7 +288,6 @@ export default function StudentFormPage() {
       sponsorOccupation,
       sponsorSubDetails: sponsorSubDetails.trim(),
       annualFamilyIncomeNPR: Number(annualIncomeNPR) || 0,
-      totalLiquidSavingsUSD: 0,
       hasPriorRefusal,
       priorRefusalDetails: priorRefusalDetails.trim(),
     };
@@ -192,50 +297,154 @@ export default function StudentFormPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-10 flex justify-center items-center">
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-10 flex justify-center items-center relative">
+      {/* Firebase-Powered Admin Bypass Modal */}
+      {showAdminModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+              <KeyRound className="w-5 h-5" />
+              <span>Firebase Admin Verification</span>
+            </div>
+
+            {!adminVerified ? (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-400">
+                  Verify your Firestore admin credentials or sign in with Google to bypass the form.
+                </p>
+
+                <div>
+                  <label className="block text-[11px] text-slate-400 mb-1">Firestore Admin Secret</label>
+                  <input
+                    type="password"
+                    placeholder="Enter Firestore Secret or Role"
+                    value={adminSecret}
+                    onChange={(e) => setAdminSecret(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyAdminPasscode()}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 text-white"
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleVerifyAdminPasscode}
+                  disabled={isVerifyingAdmin || !adminSecret.trim()}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                  {isVerifyingAdmin ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                  <span>Verify Credentials</span>
+                </button>
+
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-slate-800"></div>
+                  <span className="flex-shrink mx-2 text-[10px] text-slate-500 uppercase">OR</span>
+                  <div className="flex-grow border-t border-slate-800"></div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogleAdminLogin}
+                  disabled={isVerifyingAdmin}
+                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
+                >
+                  <span>Sign in with Google Admin</span>
+                </button>
+
+                {adminError && <p className="text-[11px] text-rose-400 leading-tight">{adminError}</p>}
+              </div>
+            ) : (
+              <div className="space-y-4 text-center py-2">
+                <div className="flex flex-col items-center">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-2" />
+                  <div className="text-sm font-bold text-emerald-300">Admin Verified via Firestore</div>
+                  <p className="text-xs text-slate-400 mt-0.5">Select your destination to jump directly:</p>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => executeAdminJump('/vo-panel')}
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-emerald-600/20"
+                  >
+                    Go to VO CCD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => executeAdminJump('/interview')}
+                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-blue-600/20"
+                  >
+                    Go to Window
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowAdminModal(false);
+                setAdminError('');
+              }}
+              className="w-full py-1 text-slate-500 text-[11px] hover:text-slate-300 text-center block cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Intake Card */}
       <div className="max-w-3xl w-full bg-slate-900/95 border border-slate-800/80 rounded-2xl p-6 md:p-9 shadow-2xl backdrop-blur-xl space-y-6">
-        
+        {/* Top Header with Admin Quick Pass Trigger */}
+        <div className="flex justify-between items-center border-b border-slate-800/80 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+              <UserCheck className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight text-white">F-1 Visa Case Intake Dossier</h1>
+              <p className="text-xs text-slate-400">Kathmandu Consular Adjudication System</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAdminModal(true)}
+            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-semibold text-emerald-400 flex items-center gap-1.5 transition cursor-pointer"
+            title="Admin Bypass"
+          >
+            <Zap className="w-3.5 h-3.5" /> Admin Pass
+          </button>
+        </div>
+
         {/* 2026 Directive */}
         <div className="p-4 bg-rose-950/30 border border-rose-800/60 rounded-xl flex items-start gap-3">
           <AlertOctagon className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
             <div className="font-bold text-rose-200 uppercase tracking-wide">
-              Official 2026 Embassy Directive • Section 214(b) Presumption Notice
+              Section 214(b) Presumption Notice
             </div>
             <p className="text-rose-300/80 leading-relaxed">
-              Nepal F-1 refusal rates currently exceed <strong>81%</strong>. Under U.S. Law (INA 214b), the Consular Officer is legally mandated to <strong>presume you intend to overstay and settle in the U.S.</strong> The initial adjudicative stance is <strong>REJECTION</strong>. Nonsense, generic, or flippant answers will result in immediate refusal.
+              Nepal F-1 refusal rates exceed <strong>81%</strong>. The Consular Officer is legally mandated to <strong>presume immigrant intent</strong>. The initial adjudicative stance is <strong>REJECTION</strong> until proven otherwise.
             </p>
           </div>
         </div>
 
-        {/* Title */}
-        <div className="border-b border-slate-800/80 pb-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
-            <UserCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">F-1 Visa Case Intake Dossier</h1>
-            <p className="text-xs text-slate-400">Information must strictly match your DS-160 and SEVIS paperwork.</p>
-          </div>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-6">
-          
-          {/* Section 1: Personal Identity */}
+          {/* Section 1: Identity */}
           <div>
             <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
               <span>1.</span> Personal Identity & Citizenship
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Full Legal Name (Passport)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Full Passport Name</label>
                 <input
                   type="text"
                   required
                   placeholder="Enter full passport name"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -246,133 +455,104 @@ export default function StudentFormPage() {
                   required
                   value={dob}
                   onChange={(e) => handleDobChange(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div className="md:col-span-2">
-                <label className="block text-xs font-medium text-slate-300 mb-1">District (Citizenship of Nepal)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Citizenship District in Nepal</label>
                 <select
                   required
                   value={district}
                   onChange={(e) => setDistrict(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                 >
-                  <option value="">Select your citizenship district in Nepal...</option>
+                  <option value="">Select your district...</option>
                   {NEPAL_DISTRICTS.map((d, i) => (
                     <option key={i} value={d}>{d}</option>
                   ))}
                 </select>
               </div>
             </div>
+          </div>
 
-            {calculatedAge !== null && (
-              <div
-                className={`mt-3 p-3 rounded-xl border text-xs flex items-start gap-2.5 ${
-                  calculatedAge < 17.5
-                    ? 'bg-amber-950/30 border-amber-800/60 text-amber-200'
-                    : calculatedAge < 18
-                    ? 'bg-blue-950/30 border-blue-800/60 text-blue-200'
-                    : 'bg-emerald-950/20 border-emerald-800/50 text-emerald-300'
-                }`}
-              >
-                <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-semibold">
-                    Calculated Age: {calculatedAge} years old —{' '}
-                    {calculatedAge < 17.5
-                      ? 'Minor Status (< 17.5 yrs)'
-                      : calculatedAge < 18
-                      ? 'Near-Adult Status (17.5+ yrs)'
-                      : 'Adult Candidate (18+ yrs)'}
-                  </div>
+          {/* Section 2: Siblings & US Family Ties */}
+          <div className="p-4 bg-slate-800/40 border border-slate-700/60 rounded-xl space-y-3">
+            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase flex items-center gap-2">
+              <Users className="w-4 h-4" /> 2. Siblings & U.S. Family Ties
+            </h2>
+            <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-200">
+              <input
+                type="checkbox"
+                checked={hasSiblings}
+                onChange={(e) => setHasSiblings(e.target.checked)}
+                className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700"
+              />
+              <span>I have siblings (brother or sister)</span>
+            </label>
+
+            {hasSiblings && (
+              <div className="pl-6 space-y-3">
+                <div className="w-44">
+                  <label className="block text-[11px] text-slate-400 mb-1">Total Siblings</label>
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="e.g. 1 or 2"
+                    value={siblingsCount}
+                    onChange={(e) => setSiblingsCount(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div className="p-3 bg-rose-950/20 border border-rose-900/40 rounded-lg space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-rose-300">
+                    <input
+                      type="checkbox"
+                      checked={hasSiblingInUS}
+                      onChange={(e) => setHasSiblingInUS(e.target.checked)}
+                      className="w-4 h-4 rounded text-rose-600 bg-slate-800 border-rose-700"
+                    />
+                    <span>⚠️ A sibling is currently living, studying, or working in the U.S.</span>
+                  </label>
+
+                  {hasSiblingInUS && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">Sibling's U.S. Status</label>
+                        <select
+                          value={siblingUSStatus}
+                          onChange={(e) => setSiblingUSStatus(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+                        >
+                          <option value="">Select status...</option>
+                          <option value="F-1 Student">F-1 Student</option>
+                          <option value="OPT">Post-Completion OPT</option>
+                          <option value="H-1B Worker">H-1B Worker</option>
+                          <option value="Green Card / Citizen">Permanent Resident (Green Card) / Citizen</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">Details (e.g. Sister at UNT)</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Sister studying in Texas"
+                          value={siblingUSDetails}
+                          onChange={(e) => setSiblingUSDetails(e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* Section 2: Siblings & Family Ties in Nepal / US */}
-          <div className="p-4 bg-slate-800/40 border border-slate-700/60 rounded-xl space-y-4">
-            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase flex items-center gap-2">
-              <Users className="w-4 h-4" /> 2. Siblings & U.S. Family Ties
-            </h2>
-            
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={hasSiblings}
-                  onChange={(e) => setHasSiblings(e.target.checked)}
-                  className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700"
-                />
-                <span>I have siblings (brother or sister)</span>
-              </label>
-
-              {hasSiblings && (
-                <div className="pl-6 space-y-3">
-                  <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Total Number of Siblings</label>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="e.g. 1 or 2"
-                      value={siblingsCount}
-                      onChange={(e) => setSiblingsCount(e.target.value)}
-                      className="w-40 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-blue-500"
-                    />
-                  </div>
-
-                  {/* Sibling in US check */}
-                  <div className="p-3 bg-rose-950/20 border border-rose-900/40 rounded-lg space-y-2">
-                    <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-rose-300">
-                      <input
-                        type="checkbox"
-                        checked={hasSiblingInUS}
-                        onChange={(e) => setHasSiblingInUS(e.target.checked)}
-                        className="w-4 h-4 rounded text-rose-600 bg-slate-800 border-rose-700"
-                      />
-                      <span>⚠️ A sibling is currently living, studying, or working in the United States</span>
-                    </label>
-
-                    {hasSiblingInUS && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                        <div>
-                          <label className="block text-[11px] text-slate-400 mb-1">Sibling's U.S. Legal Status</label>
-                          <select
-                            value={siblingUSStatus}
-                            onChange={(e) => setSiblingUSStatus(e.target.value as any)}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
-                          >
-                            <option value="">Select status...</option>
-                            <option value="F-1 Student">F-1 Student</option>
-                            <option value="OPT">Post-Completion OPT</option>
-                            <option value="H-1B Worker">H-1B Specialty Worker</option>
-                            <option value="Green Card / Citizen">Permanent Resident (Green Card) / Citizen</option>
-                            <option value="Other">Other</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[11px] text-slate-400 mb-1">Sibling Details (State / University)</label>
-                          <input
-                            type="text"
-                            placeholder="e.g. Brother in Texas at UNT"
-                            value={siblingUSDetails}
-                            onChange={(e) => setSiblingUSDetails(e.target.value)}
-                            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Section 3: Nepal Academic Credentials & Tests */}
+          {/* Section 3: Academic Credentials & Tests */}
           <div>
             <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
-              <FileCheck className="w-4 h-4" /> 3. Academic Credentials & Tests
+              <FileCheck className="w-4 h-4" /> 3. Grades & Standardized Testing
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -380,10 +560,10 @@ export default function StudentFormPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 3.65 or 3.80"
+                  placeholder="e.g. 3.65"
                   value={seeGpa}
                   onChange={(e) => setSeeGpa(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -392,39 +572,72 @@ export default function StudentFormPage() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. 3.42 or 3.70"
+                  placeholder="e.g. 3.45"
                   value={plusTwoGpa}
                   onChange={(e) => setPlusTwoGpa(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Standardized Test</label>
-                <select
-                  value={testType}
-                  onChange={(e) => setTestType(e.target.value as any)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
-                >
-                  <option value="PTE">PTE Academic</option>
-                  <option value="IELTS">IELTS</option>
-                  <option value="Duolingo">Duolingo English Test (DET)</option>
-                  <option value="TOEFL">TOEFL iBT</option>
-                  <option value="SAT">SAT</option>
-                  <option value="GRE">GRE</option>
-                  <option value="None">None / Test Waived</option>
-                </select>
+              {/* Mandatory English Test */}
+              <div className="p-3.5 bg-blue-950/20 border border-blue-900/40 rounded-xl md:col-span-2 space-y-2">
+                <div className="text-xs font-bold text-blue-300 uppercase">Mandatory English Proficiency Test</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Test Taken</label>
+                    <select
+                      value={englishTestType}
+                      onChange={(e) => setEnglishTestType(e.target.value as any)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs focus:outline-none text-white"
+                    >
+                      <option value="IELTS">IELTS (Academic)</option>
+                      <option value="PTE">PTE Academic</option>
+                      <option value="Duolingo">Duolingo English Test (DET)</option>
+                      <option value="TOEFL">TOEFL iBT</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Score Obtained</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="e.g. 6.5 (IELTS), 60 (PTE), 115 (DET)"
+                      value={englishTestScore}
+                      onChange={(e) => setEnglishTestScore(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs focus:outline-none text-white"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Test Score</label>
-                <input
-                  type="text"
-                  placeholder="e.g. 68 (PTE), 7.0 (IELTS), 1320 (SAT)"
-                  value={testScore}
-                  onChange={(e) => setTestScore(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
-                />
+              {/* Optional Aptitude Test */}
+              <div className="p-3.5 bg-slate-800/30 border border-slate-700/60 rounded-xl md:col-span-2 space-y-2">
+                <div className="text-xs font-bold text-slate-300 uppercase">Optional Standardized Test (SAT / GRE)</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Test Taken</label>
+                    <select
+                      value={aptitudeTestType}
+                      onChange={(e) => setAptitudeTestType(e.target.value as any)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs focus:outline-none text-white"
+                    >
+                      <option value="None">None / Not Taken</option>
+                      <option value="SAT">SAT (Scholastic Aptitude)</option>
+                      <option value="GRE">GRE (Graduate Record Exam)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Score (Optional)</label>
+                    <input
+                      type="text"
+                      disabled={aptitudeTestType === 'None'}
+                      placeholder="e.g. 1320 (SAT) or 315 (GRE)"
+                      value={aptitudeTestScore}
+                      onChange={(e) => setAptitudeTestScore(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs focus:outline-none text-white disabled:opacity-30"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -435,18 +648,17 @@ export default function StudentFormPage() {
               <GraduationCap className="w-4 h-4" /> 4. Target U.S. Academic Program
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              
               <div className="relative" ref={uniRef}>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Target U.S. University</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Target University</label>
                 <div className="relative">
                   <input
                     type="text"
                     required
-                    placeholder="Search university (e.g. Midwestern, North Texas...)"
+                    placeholder="Search university..."
                     value={targetUni}
                     onChange={(e) => handleUniChange(e.target.value)}
                     onFocus={() => targetUni && setShowUniDropdown(true)}
-                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-3.5 pr-8 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-3.5 pr-8 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                   />
                   <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
                 </div>
@@ -469,16 +681,16 @@ export default function StudentFormPage() {
               </div>
 
               <div className="relative" ref={majorRef}>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Target Major / Field</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Target Major</label>
                 <div className="relative">
                   <input
                     type="text"
                     required
-                    placeholder="Search major (e.g. Computer Science, Accounting...)"
+                    placeholder="Search major..."
                     value={major}
                     onChange={(e) => handleMajorChange(e.target.value)}
                     onFocus={() => major && setShowMajorDropdown(true)}
-                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-3.5 pr-8 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                    className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl pl-3.5 pr-8 py-2.5 text-sm focus:outline-none focus:border-blue-500"
                   />
                   <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3 pointer-events-none" />
                 </div>
@@ -506,12 +718,12 @@ export default function StudentFormPage() {
                   required
                   value={degreeLevel}
                   onChange={(e) => setDegreeLevel(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                 >
                   <option value="">Select degree level...</option>
                   <option value="Undergraduate">Undergraduate (Bachelor&apos;s)</option>
                   <option value="Graduate">Graduate (Master&apos;s / PhD)</option>
-                  <option value="Community College">Community College / Associate</option>
+                  <option value="Community College">Community College</option>
                 </select>
               </div>
 
@@ -520,69 +732,65 @@ export default function StudentFormPage() {
                 <input
                   type="number"
                   min="0"
-                  max="15"
-                  placeholder="Leave empty if zero gap"
+                  placeholder="0"
                   value={gapYears}
                   onChange={(e) => setGapYears(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 5: Financials & Scholarship */}
+          {/* Section 5: Financials */}
           <div>
             <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
-              <DollarSign className="w-4 h-4" /> 5. Financial Costs & Scholarship Deductions
+              <DollarSign className="w-4 h-4" /> 5. Financials & Scholarship
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Gross Annual I-20 Cost (USD $)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Gross Annual I-20 Cost ($)</label>
                 <input
                   type="number"
                   required
-                  placeholder="e.g. 32000"
+                  placeholder="e.g. 34000"
                   value={grossI20}
                   onChange={(e) => setGrossI20(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Annual Scholarship / Aid (USD $)</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Annual Scholarship ($)</label>
                 <input
                   type="number"
-                  placeholder="Leave empty if 0"
+                  placeholder="0"
                   value={scholarship}
                   onChange={(e) => setScholarship(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                 />
               </div>
             </div>
 
             <div className="mt-3 p-3.5 bg-slate-800/50 border border-slate-700/60 rounded-xl flex justify-between items-center text-xs">
-              <div className="flex items-center gap-2 text-slate-300">
-                <Calculator className="w-4 h-4 text-emerald-400" />
-                <span>Net Annual Tuition Payable to U.S. University:</span>
-              </div>
-              <div className="text-emerald-400 font-bold text-sm">
-                ${netPayableUSD.toLocaleString()} USD / year
-              </div>
+              <span className="text-slate-300 flex items-center gap-2">
+                <Calculator className="w-4 h-4 text-emerald-400" /> Net Annual Tuition Payable:
+              </span>
+              <span className="text-emerald-400 font-bold text-sm">${netPayableUSD.toLocaleString()} USD / yr</span>
             </div>
           </div>
 
-          {/* Section 6: Sponsor & Designation */}
+          {/* Section 6: Sponsorship */}
           <div>
             <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
-              <Building2 className="w-4 h-4" /> 6. Sponsor & Nepal Employment Authenticity
+              <Building2 className="w-4 h-4" /> 6. Sponsorship & Employment
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Primary Financial Sponsor</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Primary Sponsor</label>
                 <select
                   value={primarySponsor}
                   onChange={(e) => setPrimarySponsor(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                 >
                   <option value="Father">Father</option>
                   <option value="Mother">Mother</option>
@@ -593,12 +801,12 @@ export default function StudentFormPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Sponsor Occupation Category</label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Sponsor Category</label>
                 <select
                   required
                   value={sponsorOccupation}
                   onChange={(e) => setSponsorOccupation(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                 >
                   <option value="">Select official category...</option>
                   {NEPAL_OCCUPATIONS.map((occ, idx) => (
@@ -608,9 +816,7 @@ export default function StudentFormPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Annual Family Income in Nepal (NPR)
-                </label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Family Annual Income (NPR)</label>
                 <input
                   type="number"
                   step="50000"
@@ -618,50 +824,23 @@ export default function StudentFormPage() {
                   placeholder="e.g. 2400000 (24 Lakhs)"
                   value={annualIncomeNPR}
                   onChange={(e) => setAnnualIncomeNPR(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Specific Designation / Rank (AI Evaluated)
-                </label>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Designation / Rank</label>
                 <input
                   type="text"
-                  placeholder="e.g. Joint Secretary, Managing Director, Specialist Doctor"
+                  placeholder="e.g. Joint Secretary, Managing Director"
                   value={sponsorSubDetails}
                   onChange={(e) => setSponsorSubDetails(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:border-blue-500 transition"
+                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 7: Prior Refusal */}
-          <div>
-            <label className="flex items-center gap-2 cursor-pointer mb-2">
-              <input
-                type="checkbox"
-                checked={hasPriorRefusal}
-                onChange={(e) => setHasPriorRefusal(e.target.checked)}
-                className="w-4 h-4 rounded text-blue-600 bg-slate-800 border-slate-700"
-              />
-              <span className="text-xs font-medium text-rose-300">
-                I have a previous U.S. Visa Refusal under Section 214(b)
-              </span>
-            </label>
-            {hasPriorRefusal && (
-              <textarea
-                placeholder="State embassy post, refusal date, and questions asked during prior refusal..."
-                value={priorRefusalDetails}
-                onChange={(e) => setPriorRefusalDetails(e.target.value)}
-                className="w-full mt-1 bg-slate-800/80 border border-rose-800/60 rounded-xl p-3 text-xs text-slate-200 focus:outline-none"
-                rows={2}
-              />
-            )}
-          </div>
-
-          {/* Submit */}
           <button
             type="submit"
             className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/25 transition cursor-pointer"
