@@ -5,7 +5,19 @@ import { useRouter } from 'next/navigation';
 import { StudentProfile, ChatMessage } from '@/lib/types';
 import { useVoiceInput } from '@/hooks/useVoiceInput';
 import { useVoiceOutput } from '@/hooks/useVoiceOutput';
-import { Mic, MicOff, Volume2, Send, CheckCircle2, AlertCircle, Loader2, Clock } from 'lucide-react';
+import {
+  Mic,
+  MicOff,
+  Volume2,
+  Send,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Clock,
+  Radio,
+  Building2,
+  GraduationCap
+} from 'lucide-react';
 
 export default function InterviewPage() {
   const router = useRouter();
@@ -20,7 +32,6 @@ export default function InterviewPage() {
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Live Timer
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
@@ -113,7 +124,6 @@ export default function InterviewPage() {
       setMessages(updatedHistory);
       speak(voReply);
 
-      // Auto-Conclude Interview if the VO issued a verdict
       if (data.isConcluded) {
         localStorage.setItem('f1_interview_history', JSON.stringify(updatedHistory));
         setTimeout(() => {
@@ -122,7 +132,7 @@ export default function InterviewPage() {
             window.speechSynthesis.cancel();
           }
           router.push('/result');
-        }, 3500);
+        }, 4000);
       }
     } catch (err) {
       console.error(err);
@@ -143,81 +153,127 @@ export default function InterviewPage() {
   if (!profile) return null;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col p-4 md:p-8">
-      {/* Top Bar with Live Timer */}
-      <div className="max-w-4xl w-full mx-auto flex justify-between items-center pb-4 border-b border-slate-800/80">
-        <div>
-          <h2 className="text-base font-bold text-slate-100">Kathmandu Embassy • Window Counter #03</h2>
-          <p className="text-xs text-slate-400">Applicant: {profile.fullName} | {profile.targetUniversity}</p>
-        </div>
+    <main className="min-h-screen bg-[#050811] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-950/20 via-[#050811] to-black text-slate-100 flex flex-col p-3 md:p-6">
+      
+      {/* Top Bar */}
+      <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-white/10">
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 border border-slate-700/80 rounded-lg text-xs text-slate-300">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white font-black text-sm">
+            US
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-bold text-white tracking-wide">Kathmandu Consular Post • Window #03</h2>
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <Radio className="w-2.5 h-2.5 animate-pulse" /> Live Terminal
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
+              <span>Applicant: <strong className="text-slate-200">{profile.fullName}</strong></span>
+              <span>•</span>
+              <span className="flex items-center gap-1"><GraduationCap className="w-3 h-3 text-blue-400" /> {profile.targetUniversity}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900/90 border border-white/10 rounded-xl text-xs font-mono text-slate-300 shadow-inner">
             <Clock className="w-3.5 h-3.5 text-blue-400" />
-            <span>Time: {formatTime(elapsedSeconds)}</span>
+            <span>{formatTime(elapsedSeconds)}</span>
           </div>
           <button
             onClick={handleFinishInterview}
-            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition cursor-pointer"
+            className="px-3.5 py-1.5 bg-rose-600/90 hover:bg-rose-600 text-white rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-lg shadow-rose-600/20 transition cursor-pointer border border-rose-500/30"
           >
-            <CheckCircle2 className="w-4 h-4" /> Conclude Interview
+            <CheckCircle2 className="w-3.5 h-3.5" /> Conclude
           </button>
         </div>
       </div>
 
-      {/* Main Visa Window */}
-      <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col my-4 bg-slate-900/90 border border-slate-800/80 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-xl">
+      {/* Main Consular Window Console */}
+      <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col my-3 bg-slate-900/60 border border-white/10 rounded-2xl overflow-hidden shadow-2xl backdrop-blur-2xl">
         
-        {/* Consular Visualizer */}
-        <div className="bg-slate-950/80 p-6 flex flex-col items-center justify-center border-b border-slate-800/80 relative">
+        {/* Officer Glass Booth Visualizer */}
+        <div className="bg-gradient-to-b from-[#0a0f1d] to-[#080c16] p-6 flex flex-col items-center justify-center border-b border-white/10 relative">
+          
+          {/* Subtle Ambient Radial Glow */}
+          <div className="absolute inset-0 bg-blue-500/5 blur-3xl pointer-events-none"></div>
+
           <div className="relative">
+            {/* Animated Pulse Ring */}
             <div
-              className={`w-28 h-28 rounded-full border-4 flex items-center justify-center transition-all duration-300 ${
+              className={`w-28 h-28 rounded-full border-2 flex items-center justify-center transition-all duration-500 relative ${
                 isSpeaking
-                  ? 'border-blue-500 scale-105 shadow-[0_0_35px_rgba(59,130,246,0.6)]'
-                  : 'border-slate-800 bg-slate-900'
+                  ? 'border-blue-400 scale-105 shadow-[0_0_40px_rgba(59,130,246,0.45)] bg-slate-900'
+                  : 'border-white/10 bg-slate-900/80 shadow-inner'
               }`}
             >
-              <div className="text-center">
-                <span className="text-3xl">👮‍♂️</span>
-                <div className="text-[10px] uppercase tracking-wider text-slate-300 mt-1 font-semibold">
-                  Consular Officer
+              {/* Outer Pulse effect */}
+              {isSpeaking && (
+                <div className="absolute inset-0 rounded-full border border-blue-400/50 animate-ping"></div>
+              )}
+              
+              <div className="text-center select-none">
+                <span className="text-3xl filter drop-shadow">👮‍♂️</span>
+                <div className="text-[10px] uppercase tracking-wider text-blue-300 font-bold mt-1">
+                  Adjudicator
                 </div>
               </div>
             </div>
+
             {isSpeaking && (
-              <span className="absolute bottom-0 right-0 p-2 bg-blue-600 rounded-full animate-bounce">
-                <Volume2 className="w-4 h-4 text-white" />
+              <span className="absolute bottom-0 right-0 p-2 bg-blue-600 rounded-full shadow-lg shadow-blue-500/50 animate-bounce">
+                <Volume2 className="w-3.5 h-3.5 text-white" />
               </span>
             )}
           </div>
-          <p className="text-xs text-slate-400 mt-3">
-            {isSpeaking
-              ? 'Visa Officer is speaking...'
-              : isProcessing
-              ? 'Transcribing your audio with Whisper...'
-              : isLoading
-              ? 'Adjudicating your response...'
-              : isListening
-              ? 'Recording microphone... (Click mic to send)'
-              : 'Listening at the window...'}
-          </p>
+
+          {/* Status badge */}
+          <div className="mt-4 flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isSpeaking
+                  ? 'bg-blue-400 animate-pulse'
+                  : isLoading
+                  ? 'bg-amber-400 animate-ping'
+                  : 'bg-emerald-400'
+              }`}
+            ></span>
+            <span className="text-xs text-slate-300 font-medium tracking-wide">
+              {isSpeaking
+                ? 'Officer is cross-examining...'
+                : isProcessing
+                ? 'Transcribing speech with Whisper...'
+                : isLoading
+                ? 'Analyzing response against INA 214(b)...'
+                : isListening
+                ? 'Listening to applicant...'
+                : 'Officer is listening at the counter.'}
+            </span>
+          </div>
         </div>
 
-        {/* Live Conversation Transcript */}
-        <div className="flex-1 p-6 overflow-y-auto space-y-4 max-h-[360px]">
+        {/* Conversation Transcript Stream */}
+        <div className="flex-1 p-4 md:p-6 overflow-y-auto space-y-4 max-h-[380px]">
           {messages.map((m) => (
             <div
               key={m.id}
               className={`flex flex-col ${m.sender === 'student' ? 'items-end' : 'items-start'}`}
             >
-              <div className="text-[10px] text-slate-500 mb-1 tracking-wider uppercase">
-                {m.sender === 'student' ? 'You (Applicant)' : 'Visa Officer'} • {m.timestamp}
+              <div className="text-[10px] text-slate-400 mb-1 tracking-wider uppercase font-semibold flex items-center gap-1.5">
+                {m.sender === 'student' ? (
+                  <span>Applicant • {m.timestamp}</span>
+                ) : (
+                  <span className="text-blue-400 flex items-center gap-1">
+                    <Building2 className="w-2.5 h-2.5" /> Consular Officer • {m.timestamp}
+                  </span>
+                )}
               </div>
               <div
-                className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-lg ${
                   m.sender === 'student'
-                    ? 'bg-blue-600 text-white rounded-br-none shadow-md shadow-blue-600/20'
-                    : 'bg-slate-800/90 text-slate-100 border border-slate-700/70 rounded-bl-none'
+                    ? 'bg-gradient-to-tr from-blue-600 to-indigo-600 text-white rounded-br-none border border-blue-400/20'
+                    : 'bg-[#0e1424] text-slate-100 border border-white/10 rounded-bl-none'
                 }`}
               >
                 {m.text}
@@ -234,17 +290,17 @@ export default function InterviewPage() {
           </div>
         )}
 
-        {/* Controls */}
-        <div className="p-4 bg-slate-950/90 border-t border-slate-800/80 flex items-center gap-3">
+        {/* Input Bar */}
+        <div className="p-3 md:p-4 bg-[#080c16] border-t border-white/10 flex items-center gap-3">
           <button
             onClick={isListening ? stopListening : startListening}
             disabled={isProcessing}
-            className={`p-3.5 rounded-full flex items-center justify-center transition cursor-pointer ${
+            className={`p-3 rounded-xl flex items-center justify-center transition cursor-pointer border ${
               isListening
-                ? 'bg-rose-600 text-white animate-pulse shadow-lg shadow-rose-600/40'
-                : 'bg-slate-800 hover:bg-slate-700 text-slate-300'
+                ? 'bg-rose-600 text-white border-rose-500 animate-pulse shadow-lg shadow-rose-600/40'
+                : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-white/10'
             }`}
-            title={isListening ? 'Stop and transcribe' : 'Record voice with Groq Whisper'}
+            title={isListening ? 'Stop recording' : 'Speak with microphone'}
           >
             {isProcessing ? (
               <Loader2 className="w-5 h-5 animate-spin text-blue-400" />
@@ -262,18 +318,18 @@ export default function InterviewPage() {
                 ? 'Recording... speak now, then click mic to send.'
                 : isProcessing
                 ? 'Transcribing audio...'
-                : 'Type your answer or speak using the mic...'
+                : 'Type your answer or speak clearly...'
             }
             value={textInput}
             onChange={(e) => setTextInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-            className="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500 transition"
+            className="flex-1 bg-slate-900/90 border border-white/10 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500/80 focus:ring-1 focus:ring-blue-500/50 transition"
           />
 
           <button
             onClick={() => handleSendMessage()}
             disabled={!textInput.trim() || isLoading || isProcessing}
-            className="p-3.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl transition cursor-pointer"
+            className="p-3 bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 text-white rounded-xl transition cursor-pointer shadow-lg shadow-blue-500/25 border border-blue-400/20"
           >
             <Send className="w-5 h-5" />
           </button>
