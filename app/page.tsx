@@ -4,9 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { StudentProfile } from '@/lib/types';
 import { US_UNIVERSITIES, MAJORS_LIST, NEPAL_OCCUPATIONS, NEPAL_DISTRICTS } from '@/lib/universityData';
-import { db, auth, googleProvider } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { signInWithPopup } from 'firebase/auth';
 import {
   ShieldAlert,
   ArrowRight,
@@ -19,16 +18,37 @@ import {
   Building2,
   FileCheck,
   Users,
-  Zap,
   KeyRound,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Clock,
+  FileQuestion
 } from 'lucide-react';
 
 export default function StudentFormPage() {
   const router = useRouter();
 
-  // Admin Modal & Firebase Verification State
+  // Live U.S. Embassy Standard Time (Washington DC / Eastern Time)
+  const [usTime, setUsTime] = useState('');
+  useEffect(() => {
+    const updateTime = () => {
+      const now = new Date();
+      setUsTime(
+        now.toLocaleTimeString('en-US', {
+          timeZone: 'America/New_York',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true,
+        })
+      );
+    };
+    updateTime();
+    const interval = setInterval(updateTime, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Secret Admin Modal (Triggered ONLY by Double-Clicking User Icon)
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminSecret, setAdminSecret] = useState('');
   const [isVerifyingAdmin, setIsVerifyingAdmin] = useState(false);
@@ -65,7 +85,8 @@ export default function StudentFormPage() {
   const [major, setMajor] = useState('');
   const [degreeLevel, setDegreeLevel] = useState('');
 
-  // Finances
+  // I-20 & Financials Toggle
+  const [hasI20, setHasI20] = useState(true);
   const [grossI20, setGrossI20] = useState('');
   const [scholarship, setScholarship] = useState('');
   const [primarySponsor, setPrimarySponsor] = useState('Father');
@@ -139,64 +160,35 @@ export default function StudentFormPage() {
   const scholarshipNum = Number(scholarship) || 0;
   const netPayableUSD = Math.max(0, grossNum - scholarshipNum);
 
-  // 1. VERIFY ADMIN CREDENTIALS AGAINST FIRESTORE (Zero hardcoded secrets)
+  // Firestore Verification
   const handleVerifyAdminPasscode = async () => {
     if (!adminSecret.trim()) return;
     setIsVerifyingAdmin(true);
     setAdminError('');
 
     try {
-      // Query Firestore collection 'users' to check if role or email matches
       const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('role', '==', adminSecret.trim()));
-      const snap = await getDocs(q);
+      const qRole = query(usersRef, where('role', '==', adminSecret.trim()));
+      const snapRole = await getDocs(qRole);
 
-      if (!snap.empty) {
+      if (!snapRole.empty) {
         setAdminVerified(true);
       } else {
-        // Also check if admin typed the email field from Firestore
         const qEmail = query(usersRef, where('email', '==', adminSecret.trim()));
         const snapEmail = await getDocs(qEmail);
         if (!snapEmail.empty) {
           setAdminVerified(true);
         } else {
-          setAdminError('Access Denied: Unrecognized Admin Secret in Firestore');
+          setAdminError('Access Denied: Unrecognized Secret');
         }
       }
     } catch (err: any) {
-      console.error(err);
       setAdminError(`Firestore error: ${err.message}`);
     } finally {
       setIsVerifyingAdmin(false);
     }
   };
 
-  // 2. GOOGLE 1-CLICK ADMIN LOGIN
-  const handleGoogleAdminLogin = async () => {
-    setIsVerifyingAdmin(true);
-    setAdminError('');
-    try {
-      const res = await signInWithPopup(auth, googleProvider);
-      const email = res.user.email;
-
-      // Check if logged in user is admin in Firestore or matches support email
-      const usersRef = collection(db, 'users');
-      const q = query(usersRef, where('email', '==', email));
-      const snap = await getDocs(q);
-
-      if (!snap.empty || email === 'movipff@gmail.com') {
-        setAdminVerified(true);
-      } else {
-        setAdminError(`Logged in as ${email}, but this account is not registered as Admin in Firestore.`);
-      }
-    } catch (err: any) {
-      setAdminError(`Google Auth Error: ${err.message}`);
-    } finally {
-      setIsVerifyingAdmin(false);
-    }
-  };
-
-  // 3. EXECUTE ADMIN BYPASS JUMP
   const executeAdminJump = (destination: '/vo-panel' | '/interview') => {
     const adminTestProfile: StudentProfile = {
       fullName: 'Admin Test Candidate',
@@ -220,6 +212,7 @@ export default function StudentFormPage() {
       targetUniversity: 'University of North Texas',
       degreeLevel: 'Undergraduate',
       major: 'Computer Engineering',
+      hasI20: true,
       grossI20CostUSD: 34000,
       scholarshipUSD: 10000,
       netI20PayableUSD: 24000,
@@ -250,8 +243,12 @@ export default function StudentFormPage() {
       alert('Please provide your mandatory English proficiency score.');
       return;
     }
-    if (!sponsorOccupation || !grossI20 || !annualIncomeNPR) {
-      alert('Please complete the financial section.');
+    if (!sponsorOccupation || !annualIncomeNPR) {
+      alert('Please complete the sponsorship details.');
+      return;
+    }
+    if (hasI20 && !grossI20) {
+      alert('Please enter your gross annual I-20 cost.');
       return;
     }
 
@@ -281,9 +278,10 @@ export default function StudentFormPage() {
       targetUniversity: targetUni.trim(),
       degreeLevel,
       major: major.trim(),
-      grossI20CostUSD: grossNum,
-      scholarshipUSD: scholarshipNum,
-      netI20PayableUSD: netPayableUSD,
+      hasI20,
+      grossI20CostUSD: hasI20 ? grossNum : 0,
+      scholarshipUSD: hasI20 ? scholarshipNum : 0,
+      netI20PayableUSD: hasI20 ? netPayableUSD : 0,
       primarySponsor,
       sponsorOccupation,
       sponsorSubDetails: sponsorSubDetails.trim(),
@@ -297,83 +295,58 @@ export default function StudentFormPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-10 flex justify-center items-center relative">
-      {/* Firebase-Powered Admin Bypass Modal */}
+    <main className="min-h-screen bg-[#030712] text-slate-100 p-4 md:p-10 flex flex-col justify-between items-center relative">
+      {/* Secret Admin Verification Modal */}
       {showAdminModal && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
-            <div className="flex items-center gap-2 text-emerald-400 font-bold text-sm">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center gap-2 text-blue-400 font-bold text-sm">
               <KeyRound className="w-5 h-5" />
-              <span>Firebase Admin Verification</span>
+              <span>Consular Adjudicator Console</span>
             </div>
 
             {!adminVerified ? (
               <div className="space-y-3">
                 <p className="text-xs text-slate-400">
-                  Verify your Firestore admin credentials or sign in with Google to bypass the form.
+                  Verify internal credentials to bypass questionnaire.
                 </p>
-
-                <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Firestore Admin Secret</label>
-                  <input
-                    type="password"
-                    placeholder="Enter Firestore Secret or Role"
-                    value={adminSecret}
-                    onChange={(e) => setAdminSecret(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyAdminPasscode()}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-emerald-500 text-white"
-                  />
-                </div>
-
+                <input
+                  type="password"
+                  placeholder="Enter Secret Key"
+                  value={adminSecret}
+                  onChange={(e) => setAdminSecret(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleVerifyAdminPasscode()}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-blue-500 text-white"
+                />
                 <button
                   type="button"
                   onClick={handleVerifyAdminPasscode}
                   disabled={isVerifyingAdmin || !adminSecret.trim()}
-                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-slate-950 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
+                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
-                  {isVerifyingAdmin ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                  <span>Verify Credentials</span>
+                  {isVerifyingAdmin ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  <span>Authenticate Access</span>
                 </button>
-
-                <div className="relative flex py-1 items-center">
-                  <div className="flex-grow border-t border-slate-800"></div>
-                  <span className="flex-shrink mx-2 text-[10px] text-slate-500 uppercase">OR</span>
-                  <div className="flex-grow border-t border-slate-800"></div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleGoogleAdminLogin}
-                  disabled={isVerifyingAdmin}
-                  className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs rounded-xl flex items-center justify-center gap-2 transition cursor-pointer"
-                >
-                  <span>Sign in with Google Admin</span>
-                </button>
-
-                {adminError && <p className="text-[11px] text-rose-400 leading-tight">{adminError}</p>}
+                {adminError && <p className="text-[11px] text-rose-400">{adminError}</p>}
               </div>
             ) : (
-              <div className="space-y-4 text-center py-2">
-                <div className="flex flex-col items-center">
-                  <CheckCircle2 className="w-10 h-10 text-emerald-400 mb-2" />
-                  <div className="text-sm font-bold text-emerald-300">Admin Verified via Firestore</div>
-                  <p className="text-xs text-slate-400 mt-0.5">Select your destination to jump directly:</p>
-                </div>
-
+              <div className="space-y-3 text-center py-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
+                <div className="text-sm font-bold text-emerald-300">Identity Authenticated</div>
                 <div className="flex gap-2 pt-2">
                   <button
                     type="button"
                     onClick={() => executeAdminJump('/vo-panel')}
-                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-emerald-600/20"
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                   >
-                    Go to VO CCD
+                    Open VO CCD
                   </button>
                   <button
                     type="button"
                     onClick={() => executeAdminJump('/interview')}
-                    className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition cursor-pointer shadow-lg shadow-blue-600/20"
+                    className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                   >
-                    Go to Window
+                    Open Window
                   </button>
                 </div>
               </div>
@@ -393,27 +366,33 @@ export default function StudentFormPage() {
         </div>
       )}
 
-      {/* Main Intake Card */}
-      <div className="max-w-3xl w-full bg-slate-900/95 border border-slate-800/80 rounded-2xl p-6 md:p-9 shadow-2xl backdrop-blur-xl space-y-6">
-        {/* Top Header with Admin Quick Pass Trigger */}
+      {/* Main Dossier Container */}
+      <div className="max-w-3xl w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-6 md:p-9 shadow-2xl backdrop-blur-xl space-y-6 my-auto">
+        {/* Top Header */}
         <div className="flex justify-between items-center border-b border-slate-800/80 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+            {/* Double-Click Icon triggers Secret Admin Pass */}
+            <div
+              onDoubleClick={() => setShowAdminModal(true)}
+              className="w-11 h-11 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 cursor-pointer select-none transition hover:border-blue-400 hover:scale-105 active:scale-95"
+              title="Identity Badge"
+            >
               <UserCheck className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-tight text-white">F-1 Visa Case Intake Dossier</h1>
-              <p className="text-xs text-slate-400">Kathmandu Consular Adjudication System</p>
+              <div className="flex items-center gap-2">
+                <h1 className="text-xl font-bold tracking-tight text-white">F-1 Visa Case Intake Dossier</h1>
+                <span className="text-base select-none inline-block animate-pulse">🇺🇸</span>
+              </div>
+              <p className="text-xs text-slate-400">Kathmandu Consular Post • Adjudication System</p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowAdminModal(true)}
-            className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-xs font-semibold text-emerald-400 flex items-center gap-1.5 transition cursor-pointer"
-            title="Admin Bypass"
-          >
-            <Zap className="w-3.5 h-3.5" /> Admin Pass
-          </button>
+
+          {/* Live U.S. Eastern Time Badge */}
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 border border-slate-700/70 rounded-xl text-xs font-mono text-slate-300">
+            <Clock className="w-3.5 h-3.5 text-blue-400" />
+            <span>US Eastern: {usTime || 'Loading...'}</span>
+          </div>
         </div>
 
         {/* 2026 Directive */}
@@ -741,42 +720,69 @@ export default function StudentFormPage() {
             </div>
           </div>
 
-          {/* Section 5: Financials */}
-          <div>
-            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase mb-3 flex items-center gap-2">
-              <DollarSign className="w-4 h-4" /> 5. Financials & Scholarship
+          {/* Section 5: Financials & I-20 Toggle */}
+          <div className="space-y-4">
+            <h2 className="text-xs font-semibold tracking-wider text-blue-400 uppercase flex items-center gap-2">
+              <DollarSign className="w-4 h-4" /> 5. Institutional Costs & Sponsorship
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Gross Annual I-20 Cost ($)</label>
-                <input
-                  type="number"
-                  required
-                  placeholder="e.g. 34000"
-                  value={grossI20}
-                  onChange={(e) => setGrossI20(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                />
-              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">Annual Scholarship ($)</label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={scholarship}
-                  onChange={(e) => setScholarship(e.target.value)}
-                  className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
-                />
+            {/* I-20 Status Toggle */}
+            <div className="p-3.5 bg-slate-800/40 border border-slate-700/60 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-2.5 text-xs text-slate-200">
+                <FileQuestion className="w-4 h-4 text-blue-400" />
+                <span>Do you currently hold an officially issued I-20 document?</span>
               </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hasI20}
+                  onChange={(e) => setHasI20(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
             </div>
 
-            <div className="mt-3 p-3.5 bg-slate-800/50 border border-slate-700/60 rounded-xl flex justify-between items-center text-xs">
-              <span className="text-slate-300 flex items-center gap-2">
-                <Calculator className="w-4 h-4 text-emerald-400" /> Net Annual Tuition Payable:
-              </span>
-              <span className="text-emerald-400 font-bold text-sm">${netPayableUSD.toLocaleString()} USD / yr</span>
-            </div>
+            {hasI20 ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Gross Annual I-20 Cost ($)</label>
+                    <input
+                      type="number"
+                      required
+                      placeholder="e.g. 34000"
+                      value={grossI20}
+                      onChange={(e) => setGrossI20(e.target.value)}
+                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Annual Scholarship ($)</label>
+                    <input
+                      type="number"
+                      placeholder="0"
+                      value={scholarship}
+                      onChange={(e) => setScholarship(e.target.value)}
+                      className="w-full bg-slate-800/80 border border-slate-700/80 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3.5 bg-slate-800/50 border border-slate-700/60 rounded-xl flex justify-between items-center text-xs">
+                  <span className="text-slate-300 flex items-center gap-2">
+                    <Calculator className="w-4 h-4 text-emerald-400" /> Net Annual Tuition Payable:
+                  </span>
+                  <span className="text-emerald-400 font-bold text-sm">${netPayableUSD.toLocaleString()} USD / yr</span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-blue-950/20 border border-blue-900/40 rounded-xl text-xs text-blue-300 flex items-center gap-2">
+                <span>ℹ️</span>
+                <span>Pre-I-20 Mode: The Consular Officer will evaluate based on your university choice and stated budget.</span>
+              </div>
+            )}
           </div>
 
           {/* Section 6: Sponsorship */}
@@ -850,6 +856,17 @@ export default function StudentFormPage() {
           </button>
         </form>
       </div>
+
+      {/* Premium Footer */}
+      <footer className="w-full max-w-3xl mt-8 pt-4 border-t border-slate-800/80 flex flex-col md:flex-row justify-between items-center text-[11px] text-slate-500 gap-2">
+        <div className="flex items-center gap-2">
+          <span>🇺🇸</span>
+          <span>Official U.S. Consular Simulation Service • Kathmandu Post</span>
+        </div>
+        <div>
+          © 2026 INA 214(b) Adjudication Engine. All rights reserved.
+        </div>
+      </footer>
     </main>
   );
 }

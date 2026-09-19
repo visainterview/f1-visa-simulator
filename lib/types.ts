@@ -49,7 +49,8 @@ export interface StudentProfile {
   degreeLevel?: string;
   major: string;
 
-  // Financials
+  // Financials & I-20 status
+  hasI20: boolean;
   grossI20CostUSD?: any;
   scholarshipUSD?: any;
   netI20PayableUSD?: any;
