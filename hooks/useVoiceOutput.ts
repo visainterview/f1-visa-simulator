@@ -1,10 +1,26 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export function useVoiceOutput() {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const activeUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+
+  // Load natural voices properly on mount
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+
+    const loadVoices = () => {
+      const availableVoices = window.speechSynthesis.getVoices();
+      if (availableVoices.length > 0) {
+        setVoices(availableVoices);
+      }
+    };
+
+    loadVoices();
+    window.speechSynthesis.onvoiceschanged = loadVoices;
+  }, []);
 
   const stopSpeaking = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
@@ -28,28 +44,29 @@ export function useVoiceOutput() {
         return;
       }
 
-      // Clean text of markdown/brackets if any
       const cleanText = text.replace(/[*_#`[\]()]/g, '').trim();
-
       const utterance = new SpeechSynthesisUtterance(cleanText);
-      utterance.rate = 1.02; // Realistic human conversational pace
-      utterance.pitch = 0.95; // Slightly deeper, formal consular tone
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
 
-      const voices = window.speechSynthesis.getVoices();
-      
-      // Select the best natural US male or female consular voice available
-      const preferredVoice =
-        voices.find(
-          (v) =>
-            v.lang === 'en-US' &&
-            (v.name.includes('Natural') ||
-              v.name.includes('Google US English') ||
-              v.name.includes('Guy') ||
-              v.name.includes('David') ||
-              v.name.includes('Aria'))
-        ) || voices.find((v) => v.lang === 'en-US');
+      const currentVoices = voices.length > 0 ? voices : window.speechSynthesis.getVoices();
 
-      if (preferredVoice) utterance.voice = preferredVoice;
+      // Priority ranking: Find natural human voice first (Google US English or Natural)
+      const humanVoice =
+        currentVoices.find(
+          (v) => v.lang === 'en-US' && v.name.includes('Google US English')
+        ) ||
+        currentVoices.find(
+          (v) => v.lang === 'en-US' && (v.name.includes('Natural') || v.name.includes('Online'))
+        ) ||
+        currentVoices.find(
+          (v) => v.lang === 'en-US' && (v.name.includes('Guy') || v.name.includes('David') || v.name.includes('Aria'))
+        ) ||
+        currentVoices.find((v) => v.lang.startsWith('en'));
+
+      if (humanVoice) {
+        utterance.voice = humanVoice;
+      }
 
       activeUtteranceRef.current = utterance;
 
@@ -67,7 +84,7 @@ export function useVoiceOutput() {
 
       window.speechSynthesis.speak(utterance);
     },
-    [stopSpeaking]
+    [voices, stopSpeaking]
   );
 
   return { speak, stopSpeaking, isSpeaking };

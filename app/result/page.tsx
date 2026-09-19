@@ -23,76 +23,42 @@ export default function ResultPage() {
     const history: ChatMessage[] = rawHistory ? JSON.parse(rawHistory) : [];
     setProfile(data);
 
-    let finScore = 75;
-    let academicScore = 80;
-    let tiesScore = 70;
-    let confidenceScore = 80;
+    // Look at last VO message to see if approved or refused
+    const voMessages = history.filter((m) => m.sender === 'vo').map((m) => m.text.toLowerCase());
+    const lastVoMessage = voMessages[voMessages.length - 1] || '';
+    const isApproved = lastVoMessage.includes('approved') && !lastVoMessage.includes('not approved');
 
-    const studentAnswers = history
-      .filter((m) => m.sender === 'student')
-      .map((m) => m.text.toLowerCase().trim());
-    const combinedText = studentAnswers.join(' ');
+    let finScore = isApproved ? 85 : 35;
+    let academicScore = isApproved ? 85 : 40;
+    let tiesScore = isApproved ? 80 : 25;
+    let confidenceScore = isApproved ? 90 : 30;
 
     const feedback: string[] = [];
 
-    // Check for nonsense, flippant, or troll answers
-    const hasNonsense = studentAnswers.some(
-      (ans) =>
-        ans.includes('idi') ||
-        ans.includes('dik') ||
-        ans === 'by fun' ||
-        ans === 'for fun' ||
-        ans === 'idk' ||
-        ans === 'i dont know' ||
-        ans.length < 3
-    );
-
-    if (hasNonsense) {
-      finScore = 15;
-      academicScore = 10;
-      tiesScore = 10;
-      confidenceScore = 10;
-      feedback.push(
-        'Flippant or Nonsensical Answers: Responding with jokes, slang, or "I don\'t know" immediately proves lack of serious academic intent. Mandatory 214(b) refusal.'
-      );
-    }
-
-    // Sibling in US Penalty
-    if (data.hasSiblingInUS) {
-      tiesScore -= 30;
-      feedback.push(
-        `Sibling in the US (${data.siblingUSStatus || 'Resident'}): Substantial Section 214(b) immigrant intent risk. The applicant failed to overcome the presumption of joining family in the U.S.`
-      );
-    }
-
-    // Financial calculations
-    const netCost = Number(data.netI20PayableUSD ?? data.grossI20CostUSD ?? 0);
-    const incomeUSD = Number(data.annualFamilyIncomeNPR || 0) / 135;
-    if (incomeUSD < netCost) {
-      finScore -= 35;
-      feedback.push('Financial Deficit: Stated family annual income does not support multi-year net payable I-20 expenses.');
-    }
-
-    // Home ties check
-    if (!hasNonsense && !combinedText.includes('nepal') && !combinedText.includes('return')) {
-      tiesScore -= 20;
-      feedback.push('Weak Home Ties: Failed to establish a concrete return career trajectory in Nepal.');
+    if (!isApproved) {
+      feedback.push('Failed to overcome the presumption of immigrant intent under Section 214(b).');
+      if (data.hasSiblingInUS) {
+        tiesScore = Math.min(tiesScore, 20);
+        feedback.push(`Sibling in the U.S. (${data.siblingUSStatus || 'Resident'}) elevated suspicion of chain migration.`);
+      }
+      if (Number(data.annualFamilyIncomeNPR || 0) / 135 < Number(data.netI20PayableUSD || 0)) {
+        finScore = Math.min(finScore, 25);
+        feedback.push('Declared family income does not provide a realistic financial buffer for multi-year tuition.');
+      }
+      feedback.push('Responses did not convey genuine, well-articulated academic and career purpose.');
+    } else {
+      feedback.push('Demonstrated strong non-immigrant intent, viable funding sources, and credible career direction in Nepal.');
     }
 
     const overall = Math.round((finScore + academicScore + tiesScore + confidenceScore) / 4);
-    const isApproved = !hasNonsense && overall >= 65 && finScore >= 50 && tiesScore >= 50;
-
-    if (isApproved) {
-      feedback.push('Demonstrated convincing academic intent, justifiable funds, and clear career ties to Nepal.');
-    }
 
     setEvaluation({
       verdict: isApproved ? 'ISSUED' : 'REFUSED_214B',
       overallScore: overall,
-      financialScore: Math.max(0, finScore),
-      academicIntentScore: Math.max(0, academicScore),
-      homeTiesScore: Math.max(0, tiesScore),
-      confidenceScore: Math.max(0, confidenceScore),
+      financialScore: finScore,
+      academicIntentScore: academicScore,
+      homeTiesScore: tiesScore,
+      confidenceScore: confidenceScore,
       redFlagsTriggered: [],
       greenFlagsTriggered: [],
       feedbackList: feedback,
@@ -102,7 +68,7 @@ export default function ResultPage() {
   if (!profile || !evaluation) return null;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-12 flex justify-center items-center font-mono">
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-12 flex justify-center items-center font-sans">
       <div className="max-w-2xl w-full bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-2xl">
         {/* Banner Verdict */}
         <div
@@ -117,7 +83,7 @@ export default function ResultPage() {
               <CheckCircle className="w-16 h-16 text-emerald-400 mb-3" />
               <h1 className="text-2xl font-bold text-emerald-300">VISA ISSUED (APPROVED)</h1>
               <p className="text-xs text-emerald-400/80 mt-1">
-                Your passport has been retained for F-1 visa issuance.
+                Your passport has been retained for F-1 visa placement.
               </p>
             </div>
           ) : (
@@ -125,7 +91,7 @@ export default function ResultPage() {
               <XCircle className="w-16 h-16 text-rose-400 mb-3" />
               <h1 className="text-2xl font-bold text-rose-300">REFUSED UNDER SECTION 214(b)</h1>
               <p className="text-xs text-rose-400/80 mt-1">
-                Failure to overcome presumption of immigrant intent or demonstrate bona fide non-immigrant purpose.
+                Failure to overcome the statutory presumption of immigrant intent.
               </p>
             </div>
           )}
@@ -134,23 +100,23 @@ export default function ResultPage() {
         {/* Score Breakdown */}
         <div className="p-6 md:p-8 space-y-6">
           <div>
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Consular Scorecard.</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Consular Scorecard</h3>
             <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="p-3 bg-slate-800 rounded-lg">
+              <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
                 <div className="text-slate-400">Financial Credibility</div>
-                <div className="text-lg font-bold text-blue-400">{evaluation.financialScore}/100</div>
+                <div className="text-lg font-bold text-blue-400 mt-1">{evaluation.financialScore}/100</div>
               </div>
-              <div className="p-3 bg-slate-800 rounded-lg">
+              <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
                 <div className="text-slate-400">Home Ties to Nepal (214b)</div>
-                <div className="text-lg font-bold text-purple-400">{evaluation.homeTiesScore}/100</div>
+                <div className="text-lg font-bold text-purple-400 mt-1">{evaluation.homeTiesScore}/100</div>
               </div>
-              <div className="p-3 bg-slate-800 rounded-lg">
+              <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
                 <div className="text-slate-400">Academic Intent</div>
-                <div className="text-lg font-bold text-emerald-400">{evaluation.academicIntentScore}/100</div>
+                <div className="text-lg font-bold text-emerald-400 mt-1">{evaluation.academicIntentScore}/100</div>
               </div>
-              <div className="p-3 bg-slate-800 rounded-lg">
-                <div className="text-slate-400">Delivery & Seriousness</div>
-                <div className="text-lg font-bold text-amber-400">{evaluation.confidenceScore}/100</div>
+              <div className="p-3.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
+                <div className="text-slate-400">Seriousness & Demeanor</div>
+                <div className="text-lg font-bold text-amber-400 mt-1">{evaluation.confidenceScore}/100</div>
               </div>
             </div>
           </div>
@@ -162,7 +128,7 @@ export default function ResultPage() {
             </h3>
             <div className="space-y-2">
               {evaluation.feedbackList?.map((item, idx) => (
-                <div key={idx} className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-300">
+                <div key={idx} className="p-3 bg-slate-950 border border-slate-800 rounded-xl text-xs text-slate-300">
                   👉 {item}
                 </div>
               ))}
