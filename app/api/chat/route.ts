@@ -19,13 +19,11 @@ export async function POST(req: Request) {
     const rawAnswer = (latestStudentAnswer || '').trim();
     const voTurns = conversationHistory.filter((m: any) => m.sender === 'vo').length;
 
-    // Strict Consular Adjudicator Directive
-    const systemInstruction = `
-You are a real, strict U.S. Consular Officer (VO) conducting an in-person F-1 visa interview at Window #03 at the U.S. Embassy in Kathmandu, Nepal.
-You have 60 seconds to cross-examine and adjudicate this applicant under Section 214(b) of the INA.
+    // Strict Consular Officer Persona
+    const systemInstruction = `You are a real, strict U.S. Consular Officer (VO) at Window #03 at the U.S. Embassy in Kathmandu, Nepal conducting an in-person F-1 visa interview under Section 214(b) of the INA.
 
 APPLICANT'S RECORD:
-- Name: ${profile.fullName} (${profile.age} yrs old, District: ${profile.address})
+- Name: ${profile.fullName} (${profile.age} yrs, District: ${profile.address})
 - Target University: ${profile.targetUniversity} (${profile.major})
 - Has Official I-20?: ${profile.hasI20 ? `YES (${netCost})` : 'NO (Pre-I-20 stage)'}
 - English: ${profile.englishTestType} (Score: ${profile.englishTestScore})
@@ -35,14 +33,14 @@ APPLICANT'S RECORD:
 - Sponsor: ${profile.primarySponsor} (${profile.sponsorOccupation})
 - Turn: ${voTurns + 1}
 
-STRICT ADJUDICATION RULES:
-1. Generate 100% of your own questions on the fly based strictly on what the applicant just said.
-2. Ask exactly ONE short, skeptical, direct question under 18 words.
-3. Cross-examine gaps: family bank funds, sibling in the US, or university choice.
-4. Adjudication:
-   - If approving: include exact phrase "visa is approved".
-   - If refusing: include exact phrase "refused under Section 214(b)".
-`;
+CRITICAL SPEECH RULES:
+1. Speak directly to the applicant in 1 to 2 complete, well-spoken, natural sentences.
+2. NEVER output isolated single words (like "preparedness"), internal thoughts, or parenthetical labels (like "(Adjudication)").
+3. If the applicant gives lazy answers ("its good", "wht?"): Call them out directly: "That tells me nothing. What specific curriculum or lab facilities justify this investment?"
+4. If they have a sibling in the US: Drill why they are traveling to the US instead of staying in Nepal with their family.
+5. If concluding:
+   - To approve: Include the exact phrase "visa is approved".
+   - To refuse: Include the exact phrase "refused under Section 214(b)".`;
 
     // Format chat history for Gemini API (Alternating user and model)
     const contents: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
@@ -65,7 +63,6 @@ STRICT ADJUDICATION RULES:
       parts: [{ text: rawAnswer }],
     });
 
-    // SINGLE VERIFIED MODEL: gemini-3.6-flash
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`,
       {
@@ -75,8 +72,8 @@ STRICT ADJUDICATION RULES:
           systemInstruction: { parts: [{ text: systemInstruction }] },
           contents,
           generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 70,
+            temperature: 0.6,
+            maxOutputTokens: 350, // High token limit prevents sentence truncation
           },
         }),
       }
@@ -92,7 +89,14 @@ STRICT ADJUDICATION RULES:
     }
 
     const data = await res.json();
-    const reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    let reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+
+    // Clean any stray parentheses or markdown artifacts
+    reply = reply.replace(/^\([^)]*\)\s*/, '').trim();
+
+    if (!reply) {
+      reply = `What specific academic coursework at ${profile.targetUniversity} justifies this degree over studying in Nepal?`;
+    }
 
     const isApproved = reply.toLowerCase().includes('approved');
     const isRefused =
