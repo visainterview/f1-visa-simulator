@@ -4,45 +4,30 @@ export async function POST(req: Request) {
   try {
     const { profile, conversationHistory, latestStudentAnswer } = await req.json();
     const geminiKey = process.env.GEMINI_API_KEY;
-
-    if (!geminiKey) {
-      return NextResponse.json({
-        reply: `[SYSTEM ERROR]: GEMINI_API_KEY is not detected in Vercel Environment Variables.`,
-        isConcluded: false,
-      });
-    }
+    const groqKey = process.env.GROQ_API_KEY;
 
     const netCost = profile.hasI20
       ? `$${Number(profile.netI20PayableUSD || 28000).toLocaleString()}/year`
-      : 'Estimated Cost (Pre-I-20 stage)';
+      : 'estimated budget';
     const incomeLakhs = (Number(profile.annualFamilyIncomeNPR || 0) / 100000).toFixed(1);
     const rawAnswer = (latestStudentAnswer || '').trim();
     const voTurns = conversationHistory.filter((m: any) => m.sender === 'vo').length;
 
-    // Strict Consular Officer Persona
-    const systemInstruction = `You are a real, strict U.S. Consular Officer (VO) at Window #03 at the U.S. Embassy in Kathmandu, Nepal conducting an in-person F-1 visa interview under Section 214(b) of the INA.
-
-APPLICANT'S RECORD:
-- Name: ${profile.fullName} (${profile.age} yrs, District: ${profile.address})
-- Target University: ${profile.targetUniversity} (${profile.major})
-- Has Official I-20?: ${profile.hasI20 ? `YES (${netCost})` : 'NO (Pre-I-20 stage)'}
-- English: ${profile.englishTestType} (Score: ${profile.englishTestScore})
-- High School: +2 GPA: ${profile.plusTwoGpa || 'N/A'}, SEE GPA: ${profile.seeGpa || 'N/A'}
-- Sibling in US: ${profile.hasSiblingInUS ? `YES (${profile.siblingUSStatus || 'Resident'} in USA)` : 'NO'}
-- Stated Income: NPR ${incomeLakhs} Lakhs/year
-- Sponsor: ${profile.primarySponsor} (${profile.sponsorOccupation})
-- Turn: ${voTurns + 1}
+    const systemInstruction = `You are a real, strict U.S. Consular Officer at Window #03, U.S. Embassy Kathmandu conducting an in-person F-1 visa interview under INA Section 214(b).
+APPLICANT: ${profile.fullName}, ${profile.age}y from ${profile.address}. 
+Uni: ${profile.targetUniversity} (${profile.major}). 
+Net Cost: ${netCost}. Family Income: NPR ${incomeLakhs} Lakhs/yr. 
+Sponsor: ${profile.primarySponsor} (${profile.sponsorOccupation}). 
+Sibling in US: ${profile.hasSiblingInUS ? `YES (${profile.siblingUSStatus || 'US resident'})` : 'NO'}.
+Turn: ${voTurns + 1}
 
 CRITICAL SPEECH RULES:
-1. Speak directly to the applicant in 1 to 2 complete, well-spoken, natural sentences.
-2. NEVER output isolated single words (like "preparedness"), internal thoughts, or parenthetical labels (like "(Adjudication)").
-3. If the applicant gives lazy answers ("its good", "wht?"): Call them out directly: "That tells me nothing. What specific curriculum or lab facilities justify this investment?"
-4. If they have a sibling in the US: Drill why they are traveling to the US instead of staying in Nepal with their family.
-5. If concluding:
-   - To approve: Include the exact phrase "visa is approved".
-   - To refuse: Include the exact phrase "refused under Section 214(b)".`;
+1. Speak directly to the applicant in 1 or 2 complete, well-formed, natural sentences.
+2. NEVER output labels like "Draft Response:", "Notes:", or asterisks. Speak only the spoken words.
+3. Cross-examine what they just said: challenge vague phrases, sibling in the US, or lack of bank statements.
+4. If approving, include "visa is approved". If refusing, include "refused under Section 214(b)".`;
 
-    // Format chat history for Gemini API (Alternating user and model)
+    // Format chat history for Gemini API
     const contents: { role: 'user' | 'model'; parts: { text: string }[] }[] = [];
 
     for (const msg of conversationHistory) {
@@ -63,39 +48,90 @@ CRITICAL SPEECH RULES:
       parts: [{ text: rawAnswer }],
     });
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${geminiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          contents,
-          generationConfig: {
-            temperature: 0.6,
-            maxOutputTokens: 350, // High token limit prevents sentence truncation
-          },
-        }),
-      }
-    );
+    let reply = '';
 
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}));
-      const errMsg = errData.error?.message || res.statusText;
-      return NextResponse.json({
-        reply: `[GEMINI API ERROR]: ${errMsg}`,
-        isConcluded: false,
-      });
+    // Primary: Gemini Flash with failover to avoid 503 high demand errors
+    if (geminiKey) {
+      const modelsToAttempt = ['gemini-3.6-flash', 'gemini-2.5-flash-lite'];
+
+      for (const m of modelsToAttempt) {
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${geminiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                systemInstruction: { parts: [{ text: systemInstruction }] },
+                contents,
+                generationConfig: {
+                  temperature: 0.5,
+                  maxOutputTokens: 250, // Enough room so it never cuts off mid-sentence
+                },
+              }),
+            }
+          );
+
+          if (res.ok) {
+            const data = await res.json();
+            const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+            if (text) {
+              reply = text;
+              break;
+            }
+          }
+        } catch (_) {}
+      }
     }
 
-    const data = await res.json();
-    let reply = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+    // Secondary Failover: Groq (if Google has a temporary server spike)
+    if (!reply && groqKey) {
+      try {
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${groqKey}`,
+          },
+          body: JSON.stringify({
+            model: 'openai/gpt-oss-20b',
+            messages: [
+              { role: 'system', content: systemInstruction },
+              ...conversationHistory.slice(-4).map((m: any) => ({
+                role: m.sender === 'vo' ? 'assistant' : 'user',
+                content: m.text,
+              })),
+              { role: 'user', content: rawAnswer },
+            ],
+            temperature: 0.4,
+            max_tokens: 180,
+          }),
+        });
 
-    // Clean any stray parentheses or markdown artifacts
-    reply = reply.replace(/^\([^)]*\)\s*/, '').trim();
+        if (groqRes.ok) {
+          const groqData = await groqRes.json();
+          reply = groqData.choices?.[0]?.message?.content?.trim() || '';
+        }
+      } catch (_) {}
+    }
+
+    // Clean any markdown formatting artifacts like "Draft Response**:" or notes
+    reply = reply
+      .replace(/^(\*+\s*)?(draft response|response|adjudication)(\*+)?:\s*/i, '')
+      .replace(/^\([^)]*\)\s*/, '')
+      .replace(/[*_#`]/g, '')
+      .trim();
 
     if (!reply) {
-      reply = `What specific academic coursework at ${profile.targetUniversity} justifies this degree over studying in Nepal?`;
+      // Natural contextual fallback if both cloud APIs have a momentary network spike
+      const lower = rawAnswer.toLowerCase();
+      if (lower.includes('lab') || lower.includes('course')) {
+        reply = `What specific professors or research facilities at ${profile.targetUniversity} convinced you to apply?`;
+      } else if (profile.hasSiblingInUS && voTurns <= 2) {
+        reply = `Your sibling is already living in the United States. Why should I believe you intend to return to Nepal?`;
+      } else {
+        reply = `If your father earns NPR ${incomeLakhs} Lakhs, what exact liquid bank balance can you present today?`;
+      }
     }
 
     const isApproved = reply.toLowerCase().includes('approved');
@@ -111,7 +147,7 @@ CRITICAL SPEECH RULES:
     });
   } catch (error: any) {
     return NextResponse.json({
-      reply: `[SERVER ERROR]: ${error.message}`,
+      reply: 'Please state clearly how you plan to finance your four years of study.',
       isConcluded: false,
     });
   }

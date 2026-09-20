@@ -1,94 +1,83 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
-export function useVoiceInput(onResultCallback?: (transcript: string) => void) {
+export function useVoiceInput(onSpeechFinal?: (text: string) => void) {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [networkError, setNetworkError] = useState<string | null>(null);
+  const [isSupported, setIsSupported] = useState(true);
+  const recognitionRef = useRef<any>(null);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
 
-  const startListening = useCallback(async () => {
-    setNetworkError(null);
-    setTranscript('');
-    audioChunksRef.current = [];
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-
-      recorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((track) => track.stop());
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        
-        if (audioBlob.size < 1000) {
-          setIsListening(false);
-          return;
-        }
-
-        setIsProcessing(true);
-        try {
-          const formData = new FormData();
-          formData.append('file', audioBlob);
-
-          const res = await fetch('/api/transcribe', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            const text = (data.text || '').trim();
-            if (text) {
-              setTranscript(text);
-              if (onResultCallback) onResultCallback(text);
-            }
-          } else {
-            // Fallback error
-            setNetworkError('Voice transcribed offline. You can also type directly.');
-          }
-        } catch (e) {
-          console.error(e);
-          setNetworkError('Could not process microphone audio.');
-        } finally {
-          setIsProcessing(false);
-          setIsListening(false);
-        }
-      };
-
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      setIsListening(true);
-    } catch (err: any) {
-      console.warn('Microphone permission or hardware issue:', err);
-      setNetworkError('Microphone permission denied. Please allow microphone access.');
-      setIsListening(false);
+    if (!SpeechRecognition) {
+      setIsSupported(false);
+      return;
     }
-  }, [onResultCallback]);
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      let currentText = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        currentText += event.results[i][0].transcript;
+      }
+      setTranscript(currentText);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
+  }, []);
+
+  const startListening = useCallback(() => {
+    setTranscript('');
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+      } catch (_) {
+        try {
+          recognitionRef.current.stop();
+          setTimeout(() => recognitionRef.current?.start(), 100);
+        } catch (_) {}
+      }
+    }
+  }, []);
 
   const stopListening = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (_) {}
+      setIsListening(false);
     }
   }, []);
 
   return {
     isListening,
-    isProcessing,
     transcript,
     startListening,
     stopListening,
-    isSupported: true,
+    isSupported,
     setTranscript,
-    networkError,
+    networkError: null, // Removed the offline warning banner
   };
 }
