@@ -25,7 +25,6 @@ export default function InterviewPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // Voice Mode: When ON, auto-turns on mic AFTER VO stops speaking
   const [voiceModeActive, setVoiceModeActive] = useState(true);
 
   const { speak, stopSpeaking, isSpeaking } = useVoiceOutput();
@@ -33,11 +32,8 @@ export default function InterviewPage() {
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // CRITICAL FIX: Ensures initial greeting runs EXACTLY ONCE on mount
   const hasInitializedRef = useRef(false);
 
-  // Timer
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
@@ -51,41 +47,35 @@ export default function InterviewPage() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Scroll on new message
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSpeaking]);
 
-  // Transcribed speech handling
+  // Reduced silence timer to 750ms for near-instant speech turnaround
   useEffect(() => {
     if (!transcript || isSpeaking) return;
 
     setTextInput(transcript);
 
-    // Auto-send in Voice Mode after 1.8s of silence
     if (voiceModeActive && !isLoading) {
       if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = setTimeout(() => {
         const cleaned = transcript.trim();
-        // Prevent sending empty text or echoes of the opening greeting
         if (cleaned.length > 2 && !cleaned.toLowerCase().includes('pass me your passport')) {
           handleSendMessage(cleaned);
         }
-      }, 1800);
+      }, 750); // 750ms silence window allows fast, responsive conversation
     }
   }, [transcript, voiceModeActive, isSpeaking, isLoading]);
 
-  // Handle VO Finished Speaking -> Opens Student's Mic with a safety delay
   const handleVoFinished = useCallback(() => {
     if (voiceModeActive && !isLoading) {
       setTimeout(() => {
-        // Only start listening after the speaker has fully gone silent
         startListening();
-      }, 500);
+      }, 350);
     }
   }, [voiceModeActive, isLoading, startListening]);
 
-  // 1. RUNS EXACTLY ONCE ON COMPONENT MOUNT (Guaranteed no chat wipe)
   useEffect(() => {
     if (hasInitializedRef.current) return;
     hasInitializedRef.current = true;
@@ -112,15 +102,14 @@ export default function InterviewPage() {
 
     setTimeout(() => {
       speak(firstGreeting, handleVoFinished);
-    }, 700);
+    }, 600);
 
     return () => {
       stopSpeaking();
       stopListening();
     };
-  }, []); // Empty dependency array prevents any re-triggering
+  }, []);
 
-  // Handle Sending Message
   const handleSendMessage = async (textToSendOverride?: string) => {
     const textToSend = textToSendOverride || textInput;
     if (!textToSend.trim() || isLoading) return;
@@ -166,7 +155,6 @@ export default function InterviewPage() {
       const updatedHistory = [...newHistory, voMsg];
       setMessages(updatedHistory);
 
-      // Speak response out loud, then open mic when VO finishes
       speak(voReply, handleVoFinished);
 
       if (data.isConcluded) {
@@ -175,10 +163,9 @@ export default function InterviewPage() {
           stopSpeaking();
           stopListening();
           router.push('/result');
-        }, 4000);
+        }, 3500);
       }
     } catch (_) {
-      // Failover
     } finally {
       setIsLoading(false);
     }
@@ -221,7 +208,6 @@ export default function InterviewPage() {
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
-          {/* Voice Mode Toggle */}
           <button
             onClick={() => {
               const nextMode = !voiceModeActive;
@@ -259,8 +245,6 @@ export default function InterviewPage() {
         <div className="bg-gradient-to-b from-[#0A0F1D] to-[#080C16] p-6 flex flex-col items-center justify-center border-b border-white/[0.08] relative">
           
           <div className="relative flex flex-col items-center">
-            
-            {/* Visualizer Ring */}
             <div
               className={`w-24 h-24 rounded-full border-2 flex items-center justify-center transition-all duration-500 relative ${
                 isSpeaking
@@ -275,7 +259,6 @@ export default function InterviewPage() {
               </div>
             </div>
 
-            {/* Audio Waveform Bars */}
             <div className="flex items-center gap-1 mt-3 h-5">
               {[0.4, 0.8, 1, 0.6, 0.9, 0.5, 0.8, 0.3].map((height, i) => (
                 <div
@@ -310,11 +293,11 @@ export default function InterviewPage() {
             ></span>
             <span className="text-[11px] text-slate-400 font-medium tracking-wide">
               {isSpeaking
-                ? 'Officer is cross-examining (Microphone Locked)...'
+                ? 'Officer is speaking...'
                 : isListening
                 ? '🔴 YOUR TURN: Speak now into your mic (auto-sends on pause)...'
                 : isLoading
-                ? 'Evaluating statement under INA 214(b)...'
+                ? 'Officer is cross-examining...'
                 : 'Awaiting your response.'}
             </span>
           </div>
@@ -375,7 +358,7 @@ export default function InterviewPage() {
             type="text"
             placeholder={
               isListening
-                ? 'Listening to your voice... (speak now)'
+                ? 'Listening... (speak now)'
                 : isSpeaking
                 ? 'Officer is speaking...'
                 : 'Speak with your mic or type here...'
