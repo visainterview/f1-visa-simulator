@@ -14,7 +14,6 @@ import {
   Radio,
   Shield,
   GraduationCap,
-  Sparkles,
   Headphones
 } from 'lucide-react';
 
@@ -26,14 +25,17 @@ export default function InterviewPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // Continuous Voice-to-Voice Mode Toggle (Enabled by Default like ChatGPT Voice)
+  // Voice Mode: When ON, auto-turns on mic AFTER VO stops speaking
   const [voiceModeActive, setVoiceModeActive] = useState(true);
 
   const { speak, stopSpeaking, isSpeaking } = useVoiceOutput();
-  const { isListening, transcript, startListening, stopListening } = useVoiceInput();
+  const { isListening, transcript, startListening, stopListening, setTranscript } = useVoiceInput();
 
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // CRITICAL FIX: Ensures initial greeting runs EXACTLY ONCE on mount
+  const hasInitializedRef = useRef(false);
 
   // Timer
   useEffect(() => {
@@ -49,41 +51,51 @@ export default function InterviewPage() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  useEffect(() => {
-    if (transcript) {
-      setTextInput(transcript);
-
-      // Auto-send when user finishes speaking in Voice Mode (1.6s of silence)
-      if (voiceModeActive) {
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = setTimeout(() => {
-          if (transcript.trim().length > 1) {
-            handleSendMessage(transcript.trim());
-          }
-        }, 1600);
-      }
-    }
-  }, [transcript, voiceModeActive]);
-
+  // Scroll on new message
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSpeaking]);
 
-  // Handle VO Speech Completion -> Automatically triggers Student's Mic in Voice Mode
-  const handleVoFinishedSpeaking = useCallback(() => {
+  // Transcribed speech handling
+  useEffect(() => {
+    if (!transcript || isSpeaking) return;
+
+    setTextInput(transcript);
+
+    // Auto-send in Voice Mode after 1.8s of silence
+    if (voiceModeActive && !isLoading) {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = setTimeout(() => {
+        const cleaned = transcript.trim();
+        // Prevent sending empty text or echoes of the opening greeting
+        if (cleaned.length > 2 && !cleaned.toLowerCase().includes('pass me your passport')) {
+          handleSendMessage(cleaned);
+        }
+      }, 1800);
+    }
+  }, [transcript, voiceModeActive, isSpeaking, isLoading]);
+
+  // Handle VO Finished Speaking -> Opens Student's Mic with a safety delay
+  const handleVoFinished = useCallback(() => {
     if (voiceModeActive && !isLoading) {
       setTimeout(() => {
+        // Only start listening after the speaker has fully gone silent
         startListening();
-      }, 400);
+      }, 500);
     }
   }, [voiceModeActive, isLoading, startListening]);
 
+  // 1. RUNS EXACTLY ONCE ON COMPONENT MOUNT (Guaranteed no chat wipe)
   useEffect(() => {
+    if (hasInitializedRef.current) return;
+    hasInitializedRef.current = true;
+
     const raw = localStorage.getItem('f1_applicant_profile');
     if (!raw) {
       router.push('/');
       return;
     }
+
     const data: StudentProfile = JSON.parse(raw);
     setProfile(data);
 
@@ -95,17 +107,20 @@ export default function InterviewPage() {
       text: firstGreeting,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+
     setMessages([initMsg]);
 
     setTimeout(() => {
-      speak(firstGreeting, handleVoFinishedSpeaking);
-    }, 600);
+      speak(firstGreeting, handleVoFinished);
+    }, 700);
 
     return () => {
       stopSpeaking();
+      stopListening();
     };
-  }, [router, speak, stopSpeaking, handleVoFinishedSpeaking]);
+  }, []); // Empty dependency array prevents any re-triggering
 
+  // Handle Sending Message
   const handleSendMessage = async (textToSendOverride?: string) => {
     const textToSend = textToSendOverride || textInput;
     if (!textToSend.trim() || isLoading) return;
@@ -124,6 +139,7 @@ export default function InterviewPage() {
     const newHistory = [...messages, studentMsg];
     setMessages(newHistory);
     setTextInput('');
+    setTranscript('');
     setIsLoading(true);
 
     try {
@@ -138,7 +154,7 @@ export default function InterviewPage() {
       });
 
       const data = await res.json();
-      const voReply = data.reply || 'State clearly your economic ties to Nepal.';
+      const voReply = data.reply || 'State clearly your academic intent.';
 
       const voMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -150,16 +166,14 @@ export default function InterviewPage() {
       const updatedHistory = [...newHistory, voMsg];
       setMessages(updatedHistory);
 
-      // Speak response out loud, then auto-turn on student's mic when done
-      speak(voReply, handleVoFinishedSpeaking);
+      // Speak response out loud, then open mic when VO finishes
+      speak(voReply, handleVoFinished);
 
       if (data.isConcluded) {
         localStorage.setItem('f1_interview_history', JSON.stringify(updatedHistory));
         setTimeout(() => {
           stopSpeaking();
-          if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-          }
+          stopListening();
           router.push('/result');
         }, 4000);
       }
@@ -185,7 +199,7 @@ export default function InterviewPage() {
   return (
     <main className="min-h-screen bg-[#03050C] bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-950/25 via-[#03050C] to-black text-slate-100 flex flex-col p-3 md:p-6 font-sans">
       
-      {/* Top Header Bar */}
+      {/* Top Header */}
       <div className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-white/[0.08]">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500/20 via-blue-600/20 to-indigo-600/20 border border-amber-500/30 flex items-center justify-center text-amber-300">
@@ -207,9 +221,13 @@ export default function InterviewPage() {
         </div>
 
         <div className="flex items-center gap-2 self-end sm:self-auto">
-          {/* Voice to Voice Mode Toggle */}
+          {/* Voice Mode Toggle */}
           <button
-            onClick={() => setVoiceModeActive(!voiceModeActive)}
+            onClick={() => {
+              const nextMode = !voiceModeActive;
+              setVoiceModeActive(nextMode);
+              if (!nextMode) stopListening();
+            }}
             className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer border ${
               voiceModeActive
                 ? 'bg-blue-600/20 border-blue-500/50 text-blue-300 shadow-lg shadow-blue-500/20'
@@ -217,7 +235,7 @@ export default function InterviewPage() {
             }`}
           >
             <Headphones className="w-3.5 h-3.5" />
-            <span>{voiceModeActive ? 'Voice-to-Voice ON' : 'Manual Mode'}</span>
+            <span>{voiceModeActive ? 'Voice-to-Voice ON' : 'Manual Push-To-Talk'}</span>
           </button>
 
           <div className="flex items-center gap-1.5 px-3 py-1.5 bg-white/[0.03] border border-white/[0.08] rounded-xl text-xs font-mono text-slate-300 shadow-inner">
@@ -263,7 +281,7 @@ export default function InterviewPage() {
                 <div
                   key={i}
                   style={{
-                    height: isSpeaking ? `${height * 18}px` : isListening ? `${height * 12}px` : '4px',
+                    height: isSpeaking ? `${height * 18}px` : isListening ? `${height * 14}px` : '4px',
                     transition: 'height 0.15s ease',
                   }}
                   className={`w-1 rounded-full ${
@@ -292,12 +310,12 @@ export default function InterviewPage() {
             ></span>
             <span className="text-[11px] text-slate-400 font-medium tracking-wide">
               {isSpeaking
-                ? 'Officer is speaking...'
+                ? 'Officer is cross-examining (Microphone Locked)...'
                 : isListening
-                ? '🎤 Listening to your voice... (speak now)'
+                ? '🔴 YOUR TURN: Speak now into your mic (auto-sends on pause)...'
                 : isLoading
-                ? 'Officer is evaluating...'
-                : 'Awaiting response.'}
+                ? 'Evaluating statement under INA 214(b)...'
+                : 'Awaiting your response.'}
             </span>
           </div>
         </div>
@@ -332,16 +350,23 @@ export default function InterviewPage() {
           <div ref={chatBottomRef} />
         </div>
 
-        {/* Input Bar (Works with voice or typing) */}
+        {/* Input Bar */}
         <div className="p-3 md:p-4 bg-[#050811] border-t border-white/[0.08] flex items-center gap-3">
           <button
-            onClick={isListening ? stopListening : startListening}
+            onClick={() => {
+              if (isListening) {
+                stopListening();
+              } else {
+                stopSpeaking();
+                startListening();
+              }
+            }}
             className={`p-3.5 rounded-2xl flex items-center justify-center transition cursor-pointer border ${
               isListening
                 ? 'bg-emerald-600 text-white border-emerald-400 animate-pulse shadow-lg shadow-emerald-600/40'
                 : 'bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 border-white/10'
             }`}
-            title={isListening ? 'Stop listening' : 'Start speaking with microphone'}
+            title={isListening ? 'Click to stop' : 'Click to talk'}
           >
             {isListening ? <Mic className="w-5 h-5 text-white" /> : <MicOff className="w-5 h-5" />}
           </button>
@@ -350,7 +375,9 @@ export default function InterviewPage() {
             type="text"
             placeholder={
               isListening
-                ? 'Listening to your voice... (auto-sends when you pause)'
+                ? 'Listening to your voice... (speak now)'
+                : isSpeaking
+                ? 'Officer is speaking...'
                 : 'Speak with your mic or type here...'
             }
             value={textInput}
@@ -361,7 +388,7 @@ export default function InterviewPage() {
 
           <button
             onClick={() => handleSendMessage()}
-            disabled={!textInput.trim() || isLoading}
+            disabled={!textInput.trim() || isLoading || isSpeaking}
             className="p-3.5 bg-gradient-to-tr from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 disabled:opacity-40 text-white rounded-2xl transition cursor-pointer shadow-lg shadow-blue-500/25 border border-blue-400/20"
           >
             <Send className="w-5 h-5" />
